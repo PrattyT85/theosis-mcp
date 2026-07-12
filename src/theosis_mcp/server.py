@@ -775,24 +775,28 @@ async def run_sse(host: str, port: int):
 async def run_http(host: str, port: int):
     """Run server over Streamable HTTP transport."""
     try:
-        from starlette.applications import Starlette
-        from starlette.routing import Route
         from mcp.server.streamable_http import StreamableHTTPServerTransport
+        from starlette.responses import PlainTextResponse
     except ImportError:
         logger.error("HTTP transport requires 'starlette'. Install with: pip install theosis-mcp[sse]")
         sys.exit(1)
 
-    transport_http = StreamableHTTPServerTransport("/mcp")
+    # Create transport and use it as the ASGI app
+    async def mcp_app(scope, receive, send):
+        transport = StreamableHTTPServerTransport(None)
+        await transport.handle_request(scope, receive, send)
 
-    async def handle_mcp(request):
-        async with transport_http.connect(request.scope, request.receive, request._send) as streams:
-            await server.run(streams[0], streams[1], server.create_initialization_options())
+    async def health(scope, receive, send):
+        response = PlainTextResponse("OK")
+        await response(scope, receive, send)
 
-    app = Starlette(
-        routes=[
-            Route("/mcp", endpoint=handle_mcp),
-        ]
-    )
+    # Route based on path
+    async def app(scope, receive, send):
+        if scope["type"] == "http":
+            if scope["path"] == "/health":
+                await health(scope, receive, send)
+            else:
+                await mcp_app(scope, receive, send)
 
     import uvicorn
     logger.info(f"Starting Theosis MCP server (Streamable HTTP) on {host}:{port}")
