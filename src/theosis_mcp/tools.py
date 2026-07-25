@@ -398,4 +398,34 @@ Adjustable duration and starting point.""",
             "required": ["plan_type"]
         }
     ),
+    Tool(
+        name="get_commentary",
+        annotations=ToolAnnotations(title="Get Commentary", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Get historical commentaries on a Bible verse.
+
+Returns commentary entries from 312 Church Fathers and historical Christian writers
+(Augustine, Chrysostom, Aquinas, Bede, Jerome, and many more) spanning the 2nd to
+20th centuries. Filter by author name for focused study.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "description": "Bible verse reference (e.g., 'John 3:16', 'Romans 8:28')"},
+                "author": {"type": "string", "description": "Optional: filter by author name (e.g., 'Augustine', 'Chrysostom')"},
+                "limit": {"type": "integer", "description": "Maximum results (default: 10)"}
+            },
+            "required": ["reference"]
+        }
+    ),
+    Tool(
+        name="list_commentary_authors",
+        annotations=ToolAnnotations(title="List Commentary Authors", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""List all available commentary authors with entry counts.
+
+Returns the top 100 authors in the commentary database, grouped by tradition category
+(Early Fathers, Eastern/Byzantine, Western/Medieval, Reformation/Modern, etc.).""",
+        inputSchema={
+            "type": "object",
+            "properties": {}
+        }
+    ),
 ]

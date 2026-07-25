@@ -615,11 +615,8 @@ async def handle_get_extra_biblical_text(args: dict[str, Any]) -> list[TextConte
         return text("Please provide a text title.")
 
     text_data = await db.get_extra_biblical_text(title, section=section)
-<<<<<<< HEAD
-=======
     if not text_data and section:
         text_data = await db.get_extra_biblical_text(title, section=None)
->>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     if not text_data:
         return text(f"Text not found: '{title}'")
 
@@ -689,6 +686,72 @@ async def handle_get_reading_plan(args: dict[str, Any]) -> list[TextContent]:
 # Tool handler dispatch table
 # =============================================================================
 
+
+# =============================================================================
+# Commentary handlers
+# =============================================================================
+
+async def handle_get_commentary(args: dict[str, Any]) -> list[TextContent]:
+    reference = args.get("reference", "")
+    author = args.get("author")
+    limit = args.get("limit", 10)
+
+    if not reference:
+        return text("Please provide a Bible reference (e.g., 'John 3:16').")
+
+    entries = await db.get_commentary(reference, author=author, limit=limit)
+    if not entries:
+        msg = f"No commentaries found for {reference}"
+        if author:
+            msg += f" by {author}"
+        return text(msg + ".")
+
+    result = f"## Commentaries on {reference}\n"
+    if author:
+        result += f"*(Filtered by: {author})*\n"
+    result += "\n"
+
+    for entry in entries:
+        author_name = entry["author"]
+        year = entry.get("author_year")
+        cat = entry.get("author_category", "")
+        src = entry.get("source_title", "")
+        quote = entry.get("quote", "")
+
+        result += f"### {author_name}"
+        if year:
+            result += f" (c. {year})"
+        if cat:
+            result += f" — *{cat}*"
+        result += "\n"
+
+        if src:
+            result += f"> *{src}*\n\n"
+        result += f"{quote}\n\n"
+        result += "---\n\n"
+
+    return text(result)
+
+
+async def handle_list_commentary_authors(args: dict[str, Any]) -> list[TextContent]:
+    authors = await db.list_commentary_authors()
+    if not authors:
+        return text("No commentary authors found. Import commentaries first.")
+
+    result = "## Commentary Authors\n\n"
+    result += "| Author | Era | Tradition | Entries |\n"
+    result += "|---|---|---|---|\n"
+    for a in authors:
+        name = a["author"]
+        year = a.get("earliest_year", "")
+        cat = a.get("author_category", "")
+        count = a["entry_count"]
+        result += f"| {name} | {year} | {cat} | {count:,} |\n"
+
+    result += f"\n{authors.__len__()} authors (showing top 100).\n"
+    return text(result)
+
+
 _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
@@ -712,8 +775,9 @@ _TOOL_HANDLERS = {
     "search_extra_biblical": handle_search_extra_biblical,
     "get_extra_biblical_text": handle_get_extra_biblical_text,
     "get_reading_plan": handle_get_reading_plan,
+    "get_commentary": handle_get_commentary,
+    "list_commentary_authors": handle_list_commentary_authors,
 }
-
 
 # =============================================================================
 # Entry points
@@ -739,12 +803,9 @@ def main(transport: str, host: str, port: int, db_url: str | None):
 
 async def run_stdio():
     """Run server over stdio transport."""
-<<<<<<< HEAD
-=======
     global db
     db = await get_db()
     logger.info("Database connection established")
->>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     logger.info("Starting Theosis MCP server (stdio)")
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
@@ -752,12 +813,9 @@ async def run_stdio():
 
 async def run_sse(host: str, port: int):
     """Run server over SSE transport."""
-<<<<<<< HEAD
-=======
     global db
     db = await get_db()
     logger.info("Database connection established")
->>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     try:
         from starlette.applications import Starlette
         from starlette.routing import Route
@@ -791,11 +849,8 @@ async def run_sse(host: str, port: int):
 
 async def run_http(host: str, port: int):
     """Run server over Streamable HTTP transport."""
-<<<<<<< HEAD
-=======
     global db
     
->>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     try:
         from mcp.server.streamable_http import StreamableHTTPServerTransport
         from starlette.responses import PlainTextResponse
@@ -803,11 +858,6 @@ async def run_http(host: str, port: int):
         logger.error("HTTP transport requires 'starlette'. Install with: pip install theosis-mcp[sse]")
         sys.exit(1)
 
-<<<<<<< HEAD
-    # Create transport and use it as the ASGI app
-    async def mcp_app(scope, receive, send):
-        transport = StreamableHTTPServerTransport(None)
-=======
     # Initialize database connection
     db = await get_db()
     logger.info("Database connection established")
@@ -816,28 +866,12 @@ async def run_http(host: str, port: int):
     transport = StreamableHTTPServerTransport(None)
 
     async def mcp_app(scope, receive, send):
->>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         await transport.handle_request(scope, receive, send)
 
     async def health(scope, receive, send):
         response = PlainTextResponse("OK")
         await response(scope, receive, send)
 
-<<<<<<< HEAD
-    # Route based on path
-    async def app(scope, receive, send):
-        if scope["type"] == "http":
-            if scope["path"] == "/health":
-                await health(scope, receive, send)
-            else:
-                await mcp_app(scope, receive, send)
-
-    import uvicorn
-    logger.info(f"Starting Theosis MCP server (Streamable HTTP) on {host}:{port}")
-    config = uvicorn.Config(app, host=host, port=port, log_level="info")
-    server_uvicorn = uvicorn.Server(config)
-    await server_uvicorn.serve()
-=======
     async def app(scope, receive, send):
         if scope["type"] == "http" and scope["path"] == "/health":
             await health(scope, receive, send)
@@ -856,7 +890,6 @@ async def run_http(host: str, port: int):
         server_uvicorn = uvicorn.Server(config)
         await server_uvicorn.serve()
         server_task.cancel()
->>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
 
 
 if __name__ == "__main__":
