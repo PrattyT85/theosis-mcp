@@ -108,6 +108,20 @@ MODULES = {
         "source_title": "John Lightfoot's Commentary on the Gospels",
         "source_url": "https://www.studylight.org/commentaries/jlc.html",
     },
+    "KD": {
+        "author": "Keil & Delitzsch",
+        "year": 1890,
+        "category": "Reformation & Modern",
+        "source_title": "Keil & Delitzsch Commentary on the Old Testament",
+        "source_url": "https://www.studylight.org/commentaries/kdo.html",
+    },
+    "JFB": {
+        "author": "Jamieson, Fausset & Brown",
+        "year": 1871,
+        "category": "Reformation & Modern",
+        "source_title": "Jamieson-Fausset-Brown Bible Commentary",
+        "source_url": "https://www.studylight.org/commentaries/jfb.html",
+    },
 }
 
 
