@@ -80,6 +80,34 @@ MODULES = {
         "source_title": "John Wesley's Explanatory Notes on the Bible",
         "source_url": "https://www.ccel.org/ccel/wesley/notes.html",
     },
+    "Clarke": {
+        "author": "Adam Clarke",
+        "year": 1832,
+        "category": "Reformation & Modern",
+        "source_title": "Adam Clarke's Commentary on the Bible",
+        "source_url": "https://www.studylight.org/commentaries/acc.html",
+    },
+    "Barnes": {
+        "author": "Albert Barnes",
+        "year": 1870,
+        "category": "Reformation & Modern",
+        "source_title": "Barnes' Notes on the New Testament",
+        "source_url": "https://www.studylight.org/commentaries/bnb.html",
+    },
+    "RWP": {
+        "author": "A.T. Robertson",
+        "year": 1934,
+        "category": "Reformation & Modern",
+        "source_title": "Robertson's Word Pictures of the New Testament",
+        "source_url": "https://www.studylight.org/commentaries/rwp.html",
+    },
+    "Lightfoot": {
+        "author": "John Lightfoot",
+        "year": 1675,
+        "category": "Reformation & Modern",
+        "source_title": "John Lightfoot's Commentary on the Gospels",
+        "source_url": "https://www.studylight.org/commentaries/jlc.html",
+    },
 }
 
 
@@ -209,7 +237,8 @@ async def main():
                     ["mod2imp", module_name],
                     capture_output=True, text=True,
                     env={**os.environ, "SWORD_PATH": sword_path},
-                    timeout=300
+                    timeout=300,
+                    errors="replace"
                 )
                 if result.returncode != 0:
                     print(f"  ERROR: mod2imp failed: {result.stderr[:200]}")
@@ -222,7 +251,7 @@ async def main():
 
             # Parse IMP
             print(f"  Parsing IMP format...")
-            with open(imp_file) as f:
+            with open(imp_file, encoding="utf-8", errors="replace") as f:
                 imp_text = f.read()
             
             entries = parse_imp(imp_text, module_name)
