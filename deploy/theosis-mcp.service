@@ -1,0 +1,17 @@
+[Unit]
+Description=Theosis MCP Server - Theological Research AI Interface
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/theosis-mcp
+Environment=THEOSIS_DATABASE_URL=postgresql://theosis@/theosis?host=/var/run/postgresql
+Environment=PYTHONPATH=/root/theosis-mcp/src
+ExecStart=/root/theosis-mcp/.venv/bin/python3 -m theosis_mcp.server --transport streamable-http --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

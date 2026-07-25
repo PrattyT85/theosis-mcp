@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Data files (not in repo — large CSVs downloaded on demand)
+*.csv
+*.db
+*.sqlite3
+data/
+
+# Environment
+.env
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

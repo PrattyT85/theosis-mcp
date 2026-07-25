@@ -250,9 +250,14 @@ class TheosisDB:
             strongs_prefix = "G" if language.lower() == "greek" else "H"
             sql += " AND strongs LIKE $2"
             params.append(f"{strongs_prefix}%")
+<<<<<<< HEAD
         sql += " ORDER BY strongs LIMIT $2" if language else " ORDER BY strongs LIMIT $2"
         if not language:
             sql = sql.replace("LIMIT $2", f"LIMIT ${len(params)+1}")
+=======
+        param_num = len(params) + 1
+        sql += f" ORDER BY strongs LIMIT ${param_num}"
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         params.append(limit)
         return await self._fetchall(sql, *params)
 
@@ -313,6 +318,7 @@ class TheosisDB:
         limit: int = 8,
         min_strength: int | None = None,
     ) -> list[dict]:
+<<<<<<< HEAD
         """Get cross-references for a verse."""
         normalized = self._normalize_reference(reference)
 
@@ -333,6 +339,37 @@ class TheosisDB:
 
     async def get_thematic_references(self, theme: str) -> list[dict]:
         """Get thematic cross-references."""
+=======
+        """Get cross-references for a verse from bible_cross_references."""
+        normalized = self._normalize_reference(reference)
+        parts = normalized.split()
+        if len(parts) < 2:
+            return []
+        book = parts[0]
+        cv = parts[1].split(":")
+        chapter = int(cv[0])
+        verse = int(cv[1]) if len(cv) > 1 else None
+        if verse is None:
+            return []
+        return await self._fetchall("""
+            SELECT
+                fb.name as from_book, cr.from_chapter, cr.from_verse,
+                tb.name as to_book, cr.to_chapter, cr.to_verse,
+                cr.votes as vote_count
+            FROM bible_cross_references cr
+            JOIN bible_books fb ON cr.from_book_id = fb.id
+            JOIN bible_books tb ON cr.to_book_id = tb.id
+            WHERE fb.osis_ref = $1 AND cr.from_chapter = $2 AND cr.from_verse = $3
+            ORDER BY cr.votes DESC
+            LIMIT $4
+        """, book, chapter, verse, limit)
+
+
+    async def get_thematic_references(self, theme: str) -> list[dict]:
+        """Get thematic cross-references."""
+        if not await self._table_has_rows("theological_themes"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         return await self._fetchall("""
             SELECT * FROM theological_themes
             WHERE theme_slug = $1
@@ -347,12 +384,21 @@ class TheosisDB:
         """Look up biblical names (persons, places, things)."""
         query = f"%{name}%"
         sql = """
+<<<<<<< HEAD
             SELECT * FROM proper_names
             WHERE LOWER(name) LIKE LOWER($1)
         """
         params: list = [query]
         if name_type:
             sql += " AND type = $2"
+=======
+            SELECT * FROM acai_entities
+            WHERE LOWER(name) LIKE LOWER($1) OR LOWER(referred_to_as) LIKE LOWER($1)
+        """
+        params: list = [query]
+        if name_type:
+            sql += " AND entity_type = $2"
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
             params.append(name_type)
         sql += " LIMIT 20"
         return await self._fetchall(sql, *params)
@@ -375,6 +421,11 @@ class TheosisDB:
 
     async def get_genealogy(self, name: str, direction: str = "ancestors", depth: int = 5) -> list[dict]:
         """Get genealogy data for a person."""
+<<<<<<< HEAD
+=======
+        if not await self._table_has_rows("theographic_relations"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         return await self._fetchall("""
             SELECT * FROM theographic_relations
             WHERE LOWER(person_name) LIKE LOWER($1)
@@ -384,6 +435,11 @@ class TheosisDB:
 
     async def get_person_events(self, name: str) -> list[dict]:
         """Get events associated with a person."""
+<<<<<<< HEAD
+=======
+        if not await self._table_has_rows("theographic_events"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         return await self._fetchall("""
             SELECT * FROM theographic_events
             WHERE LOWER(person_name) LIKE LOWER($1)
@@ -393,6 +449,11 @@ class TheosisDB:
 
     async def get_place_history(self, name: str) -> list[dict]:
         """Get historical events for a place."""
+<<<<<<< HEAD
+=======
+        if not await self._table_has_rows("theographic_places"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         return await self._fetchall("""
             SELECT * FROM theographic_places
             WHERE LOWER(place_name) LIKE LOWER($1)
@@ -406,29 +467,68 @@ class TheosisDB:
     async def get_study_notes(self, reference: str, limit: int = 10) -> list[dict]:
         """Get study notes for a verse."""
         normalized = self._normalize_reference(reference)
+<<<<<<< HEAD
         return await self._fetchall("""
             SELECT * FROM aquifer_content
             WHERE reference = $1
             ORDER BY priority DESC
             LIMIT $2
         """, normalized, limit)
+=======
+        parts = normalized.split()
+        book = parts[0]
+        cv = parts[1].split(":")
+        chapter = int(cv[0])
+        verse = int(cv[1]) if len(cv) > 1 else 0
+        if verse > 0:
+            return await self._fetchall("""
+                SELECT * FROM aquifer_content
+                WHERE LOWER(book) = LOWER($1) AND chapter_start = $2 AND verse_start = $3
+                ORDER BY resource_type
+                LIMIT $4
+            """, book, chapter, verse, limit)
+        else:
+            return await self._fetchall("""
+                SELECT * FROM aquifer_content
+                WHERE LOWER(book) = LOWER($1) AND chapter_start = $2
+                ORDER BY resource_type
+                LIMIT $3
+            """, book, chapter, limit)
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
 
     async def get_dictionary_article(self, topic: str) -> dict | None:
         """Get a Tyndale Bible Dictionary article."""
         return await self._fetchone("""
             SELECT * FROM aquifer_content
+<<<<<<< HEAD
             WHERE content_type = 'dictionary' AND LOWER(title) LIKE LOWER($1)
+=======
+            WHERE resource_type = 'dictionary' AND LOWER(title) LIKE LOWER($1)
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
             LIMIT 1
         """, f"%{topic}%")
 
     async def get_key_terms(self, reference: str) -> list[dict]:
         """Get key theological terms for a verse."""
         normalized = self._normalize_reference(reference)
+<<<<<<< HEAD
         return await self._fetchall("""
             SELECT * FROM aquifer_content
             WHERE reference = $1 AND content_type = 'key_term'
             LIMIT 20
         """, normalized)
+=======
+        parts = normalized.split()
+        book = parts[0]
+        cv = parts[1].split(":")
+        chapter = int(cv[0])
+        verse = int(cv[1]) if len(cv) > 1 else 0
+        return await self._fetchall("""
+            SELECT * FROM aquifer_content
+            WHERE LOWER(book) = LOWER($1) AND chapter_start = $2 AND verse_start = $3 AND resource_type = 'TyndaleKeyTerm'
+            LIMIT 20
+        """, book, chapter, verse)
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
 
     # =========================================================================
     # ANE context queries
@@ -437,11 +537,21 @@ class TheosisDB:
     async def get_ane_context(self, reference: str) -> list[dict]:
         """Get Ancient Near East context for a verse."""
         normalized = self._normalize_reference(reference)
+<<<<<<< HEAD
         return await self._fetchall("""
             SELECT * FROM ane_entries
             WHERE reference = $1
             LIMIT 20
         """, normalized)
+=======
+        parts = normalized.split()
+        book = parts[0]
+        return await self._fetchall("""
+            SELECT * FROM ane_entries
+            WHERE LOWER(title) LIKE LOWER($1) OR LOWER(summary) LIKE LOWER($1)
+            LIMIT 20
+        """, f"%{book}%")
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
 
     async def get_ane_dimensions(self) -> list[str]:
         """List available ANE dimensions."""
@@ -457,6 +567,12 @@ class TheosisDB:
     async def get_theology_context(self, reference: str) -> list[dict]:
         """Get theological context for a verse."""
         normalized = self._normalize_reference(reference)
+<<<<<<< HEAD
+=======
+        # Check if themes table has data
+        if not await self._table_has_rows("theological_themes"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         return await self._fetchall("""
             SELECT * FROM theological_themes
             WHERE reference = $1
@@ -480,6 +596,11 @@ class TheosisDB:
 
     async def get_torah_weave(self, reference: str) -> list[dict]:
         """Get Torah Weave structural partners."""
+<<<<<<< HEAD
+=======
+        if not await self._table_has_rows("torah_weave"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         normalized = self._normalize_reference(reference)
         return await self._fetchall("""
             SELECT * FROM torah_weave
@@ -493,6 +614,11 @@ class TheosisDB:
 
     async def get_nt_ot_lxx_quote_hints(self, reference: str) -> list[dict]:
         """Get NT↔OT LXX quotation hints."""
+<<<<<<< HEAD
+=======
+        if not await self._table_has_rows("lxx_quotations"):
+            return []
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         normalized = self._normalize_reference(reference)
         return await self._fetchall("""
             SELECT * FROM lxx_quotations
@@ -507,9 +633,19 @@ class TheosisDB:
     async def list_translations(self) -> list[dict]:
         """List all available Bible translations."""
         return await self._fetchall("""
+<<<<<<< HEAD
             SELECT id, abbreviation, name, language, year, license, description
             FROM translations
             ORDER BY language, name
+=======
+            SELECT bt.id, bt.abbreviation, bt.name, bt.language, bt.year, bt.license, bt.description,
+                   COUNT(bv.id) as verse_count
+            FROM bible_translations bt
+            LEFT JOIN bible_books bb ON bb.translation_id = bt.id
+            LEFT JOIN bible_verses bv ON bv.book_id = bb.id
+            GROUP BY bt.id, bt.abbreviation, bt.name, bt.language, bt.year, bt.license, bt.description
+            ORDER BY bt.language, bt.name
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         """)
 
     async def get_translation_verse(
@@ -527,10 +663,17 @@ class TheosisDB:
 
         return await self._fetchone("""
             SELECT v.*, t.name as translation_name, t.abbreviation
+<<<<<<< HEAD
             FROM verses v
             JOIN books b ON v.book_id = b.id
             JOIN translations t ON b.translation_id = t.id
             WHERE b.name = $1 AND v.chapter = $2 AND v.verse = $3
+=======
+            FROM bible_verses v
+            JOIN bible_books b ON v.book_id = b.id
+            JOIN bible_translations t ON b.translation_id = t.id
+            WHERE b.osis_ref = $1 AND v.chapter = $2 AND v.verse = $3
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
             AND t.abbreviation = $4
             LIMIT 1
         """, book, chapter, verse, translation_abbrev)
@@ -586,14 +729,24 @@ class TheosisDB:
         if section:
             return await self._fetchone("""
                 SELECT * FROM extra_biblical_texts
+<<<<<<< HEAD
                 WHERE LOWER(title) LIKE LOWER($1) AND LOWER(section) LIKE LOWER($2)
                 LIMIT 1
             """, f"%{title}%", f"%{section}%")
+=======
+                WHERE LOWER(title) = LOWER($1) AND LOWER(section) = LOWER($2)
+                LIMIT 1
+            """, title, section)
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         return await self._fetchone("""
             SELECT * FROM extra_biblical_texts
             WHERE LOWER(title) LIKE LOWER($1)
             LIMIT 1
+<<<<<<< HEAD
         """, f"%{title}%")
+=======
+        """, title)
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
 
     # =========================================================================
     # NEW: Full-text search across all translations (theosis-specific)
@@ -608,9 +761,15 @@ class TheosisDB:
                    ts_headline('english', v.text, plainto_tsquery('english', $1),
                               'MaxWords=50, MinWords=20, ShortWord=3, MaxFragments=3') as snippet,
                    ts_rank(to_tsvector('english', v.text), plainto_tsquery('english', $1)) as rank
+<<<<<<< HEAD
             FROM verses v
             JOIN books b ON v.book_id = b.id
             JOIN translations t ON b.translation_id = t.id
+=======
+            FROM bible_verses v
+            JOIN bible_books b ON v.book_id = b.id
+            JOIN bible_translations t ON b.translation_id = t.id
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
             WHERE to_tsvector('english', v.text) @@ plainto_tsquery('english', $1)
         """
         params: list = [query]
@@ -657,7 +816,11 @@ class TheosisDB:
 
         # Find similar verses
         return await self._fetchall("""
+<<<<<<< HEAD
             SELECT ve.book, ve.chapter, ve.verse, v.text,
+=======
+            SELECT ve.book, ve.chapter, ve.verse, v.text_english as text,
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
                    1 - (ve.embedding <=> $1) as similarity
             FROM verse_embeddings ve
             JOIN verses v ON ve.verse_id = v.id

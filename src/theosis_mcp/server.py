@@ -615,6 +615,11 @@ async def handle_get_extra_biblical_text(args: dict[str, Any]) -> list[TextConte
         return text("Please provide a text title.")
 
     text_data = await db.get_extra_biblical_text(title, section=section)
+<<<<<<< HEAD
+=======
+    if not text_data and section:
+        text_data = await db.get_extra_biblical_text(title, section=None)
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     if not text_data:
         return text(f"Text not found: '{title}'")
 
@@ -734,6 +739,12 @@ def main(transport: str, host: str, port: int, db_url: str | None):
 
 async def run_stdio():
     """Run server over stdio transport."""
+<<<<<<< HEAD
+=======
+    global db
+    db = await get_db()
+    logger.info("Database connection established")
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     logger.info("Starting Theosis MCP server (stdio)")
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
@@ -741,6 +752,12 @@ async def run_stdio():
 
 async def run_sse(host: str, port: int):
     """Run server over SSE transport."""
+<<<<<<< HEAD
+=======
+    global db
+    db = await get_db()
+    logger.info("Database connection established")
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     try:
         from starlette.applications import Starlette
         from starlette.routing import Route
@@ -774,6 +791,11 @@ async def run_sse(host: str, port: int):
 
 async def run_http(host: str, port: int):
     """Run server over Streamable HTTP transport."""
+<<<<<<< HEAD
+=======
+    global db
+    
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
     try:
         from mcp.server.streamable_http import StreamableHTTPServerTransport
         from starlette.responses import PlainTextResponse
@@ -781,15 +803,27 @@ async def run_http(host: str, port: int):
         logger.error("HTTP transport requires 'starlette'. Install with: pip install theosis-mcp[sse]")
         sys.exit(1)
 
+<<<<<<< HEAD
     # Create transport and use it as the ASGI app
     async def mcp_app(scope, receive, send):
         transport = StreamableHTTPServerTransport(None)
+=======
+    # Initialize database connection
+    db = await get_db()
+    logger.info("Database connection established")
+
+    # Create transport once and connect it to the MCP server
+    transport = StreamableHTTPServerTransport(None)
+
+    async def mcp_app(scope, receive, send):
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
         await transport.handle_request(scope, receive, send)
 
     async def health(scope, receive, send):
         response = PlainTextResponse("OK")
         await response(scope, receive, send)
 
+<<<<<<< HEAD
     # Route based on path
     async def app(scope, receive, send):
         if scope["type"] == "http":
@@ -803,6 +837,26 @@ async def run_http(host: str, port: int):
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server_uvicorn = uvicorn.Server(config)
     await server_uvicorn.serve()
+=======
+    async def app(scope, receive, send):
+        if scope["type"] == "http" and scope["path"] == "/health":
+            await health(scope, receive, send)
+        else:
+            await mcp_app(scope, receive, send)
+
+    import uvicorn
+
+    # Start the MCP server with the transport's connected streams
+    async with transport.connect() as (read_stream, write_stream):
+        server_task = asyncio.create_task(
+            server.run(read_stream, write_stream, server.create_initialization_options())
+        )
+        logger.info(f"Starting Theosis MCP server (Streamable HTTP) on {host}:{port}")
+        config = uvicorn.Config(app, host=host, port=port, log_level="info")
+        server_uvicorn = uvicorn.Server(config)
+        await server_uvicorn.serve()
+        server_task.cancel()
+>>>>>>> e7fb3fa (v0.2.0: Import scripts, data builders, deploy config, and updated database.py)
 
 
 if __name__ == "__main__":
