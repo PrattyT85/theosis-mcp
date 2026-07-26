@@ -179,17 +179,43 @@ context, genre, and authorial intent before using parallels in interpretation.""
     Tool(
         name="explore_genealogy",
         annotations=ToolAnnotations(title="Explore Genealogy", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
-        description="""Traverse multi-generational family trees for 1,100+ biblical persons.
-
-Traces lineage across many generations — ancestors, descendants, siblings, tribal
-affiliations. Essential for understanding biblical narrative connections.""",
+        description="""Explore biblical genealogies — ancestors, descendants, or siblings of a person.""",
         inputSchema={
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Person name (e.g., 'David', 'Abraham')"},
-                "direction": {"type": "string", "enum": ["ancestors", "descendants", "siblings"], "description": "Default: ancestors"}
+                "direction": {"type": "string", "enum": ["ancestors", "descendants", "siblings"], "description": "Which direction to explore"}
             },
             "required": ["name"]
+        }
+    ),
+    Tool(
+        name="explore_places",
+        annotations=ToolAnnotations(title="Explore Places", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Explore biblical places — search by name, filter by type, or list all.
+
+110 locations with coordinates and verse references. Types include city, mountain,
+river, sea, region, valley, and site.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Optional: search by place name"},
+                "feature_type": {"type": "string", "description": "Optional: filter by type (city, mountain, river, sea, region, valley, site)"}
+            }
+        }
+    ),
+    Tool(
+        name="explore_events",
+        annotations=ToolAnnotations(title="Explore Events", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Explore biblical events with participants and locations.
+
+79 major events from Creation to the Early Church, in chronological order.
+Each event shows participants and locations.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Optional: search events by name"}
+            }
         }
     ),
     Tool(

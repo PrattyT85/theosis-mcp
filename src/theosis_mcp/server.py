@@ -384,6 +384,93 @@ async def handle_explore_genealogy(args: dict[str, Any]) -> list[TextContent]:
 
 
 # =============================================================================
+# Explore Places
+# =============================================================================
+
+async def handle_explore_places(args: dict[str, Any]) -> list[TextContent]:
+    name = args.get("name")
+    feature_type = args.get("feature_type")
+
+    if name:
+        places = await db.explore_places(name=name)
+        if not places:
+            return text(f"No places found matching '{name}'.")
+        result = f"## Places matching '{name}'\n\n"
+        for p in places:
+            result += f"### {p['name']} ({p['feature_type']})\n"
+            if p.get("latitude") and p.get("longitude"):
+                result += f"📍 {p['latitude']}, {p['longitude']}\n"
+            refs = p.get("verse_refs", [])
+            if refs:
+                result += f"**Verses**: {', '.join(refs[:10])}"
+                if len(refs) > 10:
+                    result += f" (+{len(refs)-10} more)"
+                result += "\n"
+            result += "\n---\n\n"
+        return text(result)
+
+    elif feature_type:
+        places = await db.explore_places(feature_type=feature_type)
+        if not places:
+            return text(f"No places found with type '{feature_type}'.")
+        result = f"## Places: {feature_type}\n\n"
+        for p in places:
+            result += f"- **{p['name']}**"
+            refs = p.get("verse_refs", [])
+            if refs:
+                result += f" — {', '.join(refs[:5])}"
+            result += "\n"
+        return text(result)
+
+    else:
+        types = await db.explore_places()
+        if not types:
+            return text("No place data available.")
+        result = "## Biblical Places\n\n"
+        result += "| Type | Count |\n|---|---|\n"
+        for t in types:
+            result += f"| {t['feature_type']} | {t['count']} |\n"
+        result += "\nUse `explore_places` with a `name` or `feature_type` to explore."
+        return text(result)
+
+
+# =============================================================================
+# Explore Events
+# =============================================================================
+
+async def handle_explore_events(args: dict[str, Any]) -> list[TextContent]:
+    name = args.get("name")
+
+    events = await db.explore_events(name=name)
+    if not events:
+        return text(f"No events found" + (f" matching '{name}'" if name else "") + ".")
+
+    if name:
+        result = f"## Events matching '{name}'\n\n"
+    else:
+        result = "## Biblical Events (Chronological)\n\n"
+
+    for e in events:
+        year = e.get("start_year", "")
+        year_str = f"{abs(year)} {'BCE' if year < 0 else 'CE'}" if year else "unknown"
+        result += f"### {e['title']} ({year_str})\n"
+        if e.get("duration"):
+            result += f"*Duration: {e['duration']}*\n"
+        
+        participants = e.get("participants", [])
+        if participants:
+            result += f"**Participants**: {', '.join(participants)}\n"
+        
+        locations = e.get("locations", [])
+        if locations:
+            result += f"**Locations**: {', '.join(locations)}\n"
+        
+        result += "\n---\n\n"
+
+    return text(result)
+
+
+# =============================================================================
 # Study Notes
 # =============================================================================
 
@@ -762,6 +849,8 @@ _TOOL_HANDLERS = {
     "search_by_strongs": handle_search_by_strongs,
     "find_similar_passages": handle_find_similar_passages,
     "explore_genealogy": handle_explore_genealogy,
+    "explore_places": handle_explore_places,
+    "explore_events": handle_explore_events,
     "get_study_notes": handle_get_study_notes,
     "get_dictionary_article": handle_get_dictionary_article,
     "get_ane_context": handle_get_ane_context,

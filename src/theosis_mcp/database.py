@@ -414,6 +414,86 @@ class TheosisDB:
         """, f"%{name}%")
 
     # =========================================================================
+    # Knowledge graph queries — Places & Events
+    # =========================================================================
+
+    async def explore_places(self, name: str | None = None, 
+                             feature_type: str | None = None) -> list[dict]:
+        """Explore biblical places with verse mentions.
+
+        Args:
+            name: Optional name filter (partial match)
+            feature_type: Optional filter by type (city, mountain, river, etc.)
+        """
+        if name:
+            return await self._fetchall("""
+                SELECT 
+                    gp.name, gp.feature_type, gp.latitude, gp.longitude,
+                    array_agg(gvm.verse_ref ORDER BY gvm.verse_ref) as verse_refs
+                FROM graph_places gp
+                LEFT JOIN graph_verse_mentions gvm ON gvm.entity_id = gp.id
+                WHERE gp.name ILIKE $1
+                GROUP BY gp.id, gp.name, gp.feature_type, gp.latitude, gp.longitude
+                ORDER BY gp.name
+                LIMIT 20
+            """, f"%{name}%")
+        elif feature_type:
+            return await self._fetchall("""
+                SELECT 
+                    gp.name, gp.feature_type, gp.latitude, gp.longitude,
+                    array_agg(gvm.verse_ref ORDER BY gvm.verse_ref) as verse_refs
+                FROM graph_places gp
+                LEFT JOIN graph_verse_mentions gvm ON gvm.entity_id = gp.id
+                WHERE gp.feature_type = $1
+                GROUP BY gp.id, gp.name, gp.feature_type, gp.latitude, gp.longitude
+                ORDER BY gp.name
+            """, feature_type)
+        else:
+            return await self._fetchall("""
+                SELECT feature_type, COUNT(*) as count
+                FROM graph_places
+                GROUP BY feature_type
+                ORDER BY count DESC
+            """)
+
+    async def explore_events(self, name: str | None = None) -> list[dict]:
+        """Explore biblical events with participants and locations.
+
+        Args:
+            name: Optional event name filter (partial match)
+        """
+        if name:
+            return await self._fetchall("""
+                SELECT 
+                    e.title, e.start_year, e.duration,
+                    array_agg(DISTINCT gp.name) FILTER (WHERE gp.name IS NOT NULL) as participants,
+                    array_agg(DISTINCT gpl.name) FILTER (WHERE gpl.name IS NOT NULL) as locations
+                FROM graph_events e
+                LEFT JOIN graph_person_event_edges pee ON pee.event_id = e.id
+                LEFT JOIN graph_people gp ON gp.id = pee.person_id
+                LEFT JOIN graph_event_place_edges epe ON epe.event_id = e.id
+                LEFT JOIN graph_places gpl ON gpl.id = epe.place_id
+                WHERE e.title ILIKE $1
+                GROUP BY e.id, e.title, e.start_year, e.duration
+                ORDER BY e.sort_key
+                LIMIT 20
+            """, f"%{name}%")
+        else:
+            return await self._fetchall("""
+                SELECT 
+                    e.title, e.start_year, e.duration,
+                    array_agg(DISTINCT gp.name) FILTER (WHERE gp.name IS NOT NULL) as participants,
+                    array_agg(DISTINCT gpl.name) FILTER (WHERE gpl.name IS NOT NULL) as locations
+                FROM graph_events e
+                LEFT JOIN graph_person_event_edges pee ON pee.event_id = e.id
+                LEFT JOIN graph_people gp ON gp.id = pee.person_id
+                LEFT JOIN graph_event_place_edges epe ON epe.event_id = e.id
+                LEFT JOIN graph_places gpl ON gpl.id = epe.place_id
+                GROUP BY e.id, e.title, e.start_year, e.duration
+                ORDER BY e.sort_key
+            """)
+
+    # =========================================================================
     # Study notes (Aquifer) queries
     # =========================================================================
 
