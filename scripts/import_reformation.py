@@ -122,7 +122,29 @@ MODULES = {
         "source_title": "Jamieson-Fausset-Brown Bible Commentary",
         "source_url": "https://www.studylight.org/commentaries/jfb.html",
     },
+    "Scofield": {
+        "author": "C.I. Scofield",
+        "year": 1917,
+        "category": "Reformation & Modern",
+        "source_title": "Scofield Reference Notes",
+        "source_url": "https://www.studylight.org/commentaries/srn.html",
+    },
+    "PNT": {
+        "author": "B.W. Johnson",
+        "year": 1891,
+        "category": "Reformation & Modern",
+        "source_title": "The People's New Testament",
+        "source_url": "https://www.studylight.org/commentaries/pnt.html",
+    },
+    "TFG": {
+        "author": "J.W. McGarvey & Philip Y. Pendleton",
+        "year": 1914,
+        "category": "Reformation & Modern",
+        "source_title": "The Fourfold Gospel",
+        "source_url": "https://www.studylight.org/commentaries/tfg.html",
+    },
 }
+
 
 
 def strip_osis(text):
