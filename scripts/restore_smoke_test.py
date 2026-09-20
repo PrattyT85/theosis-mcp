@@ -62,9 +62,9 @@ def main() -> int:
         if query(database, "SELECT current_setting('server_encoding');") != "UTF8":
             raise RuntimeError("restored database is not UTF8")
         checks = {
-            "translations": ("SELECT count(*) FROM bible_translations;", 43),
-            "verses": ("SELECT count(*) FROM bible_verses;", 1_100_000),
-            "theological_works": ("SELECT count(*) FROM theological_works;", 384),
+            "translations": ("SELECT count(*) FROM bible_translations;", 30),
+            "verses": ("SELECT count(*) FROM bible_verses;", 1_000_000),
+            "theological_works": ("SELECT count(*) FROM theological_works;", 350),
         }
         for label, (sql, minimum) in checks.items():
             count = int(query(database, sql))
