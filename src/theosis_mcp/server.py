@@ -950,9 +950,24 @@ async def handle_get_textual_variants(args: dict[str, Any]) -> list[TextContent]
         if v.get("heiser_analysis"):
             result += f"**Heiser Analysis**: {v['heiser_analysis']}\n"
         witnesses = v.get("witnesses") or []
+        if isinstance(witnesses, str):
+            try:
+                witnesses = json.loads(witnesses)
+            except json.JSONDecodeError:
+                witnesses = []
+        if witnesses and all(isinstance(w, str) for w in witnesses):
+            parsed = []
+            for item in witnesses:
+                try:
+                    value = json.loads(item)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(value, dict):
+                    parsed.append(value)
+            witnesses = parsed
         if witnesses:
-            base_w = [w["manuscript"] for w in witnesses if w.get("reading_support") == "base"]
-            var_w = [w["manuscript"] for w in witnesses if w.get("reading_support") == "variant"]
+            base_w = [w["manuscript"] for w in witnesses if isinstance(w, dict) and w.get("reading_support") == "base"]
+            var_w = [w["manuscript"] for w in witnesses if isinstance(w, dict) and w.get("reading_support") == "variant"]
             if base_w:
                 result += f"**Base support**: {', '.join(base_w)}\n"
             if var_w:
