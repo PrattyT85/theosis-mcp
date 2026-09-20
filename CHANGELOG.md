@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added Perseus Digital Library integration: stdio MCP server documentation, smoke test, and offline test suite.
+
 ## 0.9.1
 
 - Added VarApp parsing and imported 27,668 additional NT textual variants.
