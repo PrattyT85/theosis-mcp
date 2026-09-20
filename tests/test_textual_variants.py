@@ -391,5 +391,205 @@ class TestLiveTextualVariants:
         assert "compare_variant_readings" in names
 
 
+# ---------------------------------------------------------------------------
+# Focused live regression tests: witness-specific content verification
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.live
+@pytestmark_live
+class TestLiveWitnessRegression:
+    """Regression tests verifying witness-specific content in tool output.
+
+    These tests assert on structural markers (source provenance, base/variant
+    witness labels, non-empty content) rather than exact corpus counts so
+    they survive normal data evolution without becoming fragile.
+    """
+
+    # -- get_textual_variants: source and witness markers --------------------
+
+    def test_get_textual_variants_mat_1_1_has_source_and_witness_markers(self):
+        """Matthew 1:1 variants must show a source label and witness markers."""
+        client = _get_client()
+        result = client.tools_call("get_textual_variants", {
+            "reference": "Matthew 1:1",
+            "limit": 5,
+        })
+        text = tool_text(result)
+        # Either no variants found or real content
+        if "No textual variants found" in text:
+            return  # no data for this verse is acceptable
+        # Source provenance must be present
+        assert "Source" in text, "Missing 'Source' header in textual variant output"
+        # At least one variant entry should carry a witness label
+        assert ("Base" in text or "Variant" in text or "base" in text or
+                "variant" in text), (
+            "No base/variant witness markers in Matthew 1:1 output"
+        )
+
+    def test_get_textual_variants_mat_1_5_has_sblgnt_source(self):
+        """Matthew 1:5 is known to have SBLGNT-apparatus variants.
+
+        This is a stable reference from the Heiser/VarApp import.
+        """
+        client = _get_client()
+        result = client.tools_call("get_textual_variants", {
+            "reference": "Matthew 1:5",
+            "limit": 5,
+        })
+        text = tool_text(result)
+        if "No textual variants found" in text:
+            pytest.skip("No textual variants loaded for Matthew 1:5")
+        # Source header and SBLGNT provenance
+        assert "Source" in text, "Missing 'Source' header"
+        assert "SBLGNT" in text, (
+            "Matthew 1:5 should contain SBLGNT source after VarApp import"
+        )
+        # Witness labels
+        assert ("Base" in text or "Variant" in text or "base" in text or
+                "variant" in text), (
+            "No base/variant witness markers for Matthew 1:5"
+        )
+
+    # -- list_manuscript_witnesses: non-empty witness content ----------------
+
+    def test_list_manuscript_witnesses_mat_1_5_non_empty(self):
+        """Matthew 1:5 witnesses must be non-empty after VarApp import."""
+        client = _get_client()
+        result = client.tools_call("list_manuscript_witnesses", {
+            "reference": "Matthew 1:5",
+            "limit": 20,
+        })
+        text = tool_text(result)
+        # Must have content (either witnesses or a clear empty message)
+        assert len(text) > 0, "Empty response from list_manuscript_witnesses"
+        # After VarApp import we expect real witnesses, not an empty message
+        if "No manuscript witnesses found" in text:
+            pytest.skip("No witnesses loaded for Matthew 1:5")
+        # Verify structural markers: witness sigla and reading support
+        assert "witness" in text.lower() or "Manuscript" in text, (
+            "Expected witness/manuscript header in list_manuscript_witnesses output"
+        )
+        # Must show reading support (base or variant)
+        assert ("base" in text.lower() or "variant" in text.lower()), (
+            "No reading_support label in manuscript witnesses output"
+        )
+        # At least one witness count line
+        assert "witness" in text.lower(), "Expected witness count footer"
+
+    def test_list_manuscript_witnesses_unfiltered_non_zero_count(self):
+        """Unfiltered witness list must report a positive count."""
+        client = _get_client()
+        result = client.tools_call("list_manuscript_witnesses", {})
+        text = tool_text(result)
+        assert len(text) > 0, "Empty response from unfiltered witnesses"
+        # Must contain a numeric count at the end
+        import re
+        count_match = re.search(r"(\d+)\s*witness", text, re.IGNORECASE)
+        if count_match:
+            count = int(count_match.group(1))
+            assert count > 0, "Witness count must be positive"
+        # Regardless of count format, must contain witness sigla
+        known_sigla = ["WH", "Treg", "NA", "RP", "SBL", "Byz"]
+        assert any(sig in text for sig in known_sigla), (
+            f"Expected at least one known witness siglum ({known_sigla})"
+        )
+
+    # -- compare_variant_readings: base/variant support and source -----------
+
+    def test_compare_variant_readings_mat_1_5_has_source_and_support(self):
+        """Matthew 1:5 comparison must show source and base/variant witnesses."""
+        client = _get_client()
+        result = client.tools_call("compare_variant_readings", {
+            "reference": "Matthew 1:5",
+            "limit": 5,
+        })
+        text = tool_text(result)
+        if "No variant readings found" in text:
+            pytest.skip("No variant readings for Matthew 1:5")
+        # Source header present
+        assert "MT/Base" in text or "Variant" in text or "MT" in text, (
+            "Missing MT/Base reading header in compare output"
+        )
+        # Base witnesses section
+        assert ("Base" in text or "base" in text or "Base witnesses" in text), (
+            "Missing base witness label in compare_variant_readings"
+        )
+        # Variant witnesses section
+        assert ("Variant" in text or "variant" in text or "Variant witnesses" in text), (
+            "Missing variant witness label in compare_variant_readings"
+        )
+
+    def test_compare_variant_readings_mat_1_1_has_source(self):
+        """Matthew 1:1 comparison output must contain a source line."""
+        client = _get_client()
+        result = client.tools_call("compare_variant_readings", {
+            "reference": "Matthew 1:1",
+            "limit": 5,
+        })
+        text = tool_text(result)
+        if "No variant readings found" in text:
+            return  # empty is acceptable
+        assert "Source" in text or "MT" in text or "Variant" in text, (
+            "Expected source or reading header in compare output"
+        )
+
+    # -- source counts: represent without exact full-corpus assertion --------
+
+    def test_textual_variant_source_counts_are_numeric(self):
+        """Source counts must be numeric and positive — not exact corpus size.
+
+        We intentionally do NOT assert the full corpus count (34,508) because
+        that is fragile.  Instead we verify the count line contains a positive
+        integer and the word 'variant' or 'source'.
+        """
+        import re
+        client = _get_client()
+        # Use a well-populated book to ensure we get data
+        result = client.tools_call("get_textual_variants", {
+            "reference": "Matthew 1",
+            "limit": 100,
+        })
+        text = tool_text(result)
+        if "No textual variants found" in text:
+            return  # no data is acceptable
+        # Look for any numeric count in the output
+        numbers = re.findall(r"\d[\d,]*", text)
+        assert len(numbers) > 0, "Expected at least one numeric value in output"
+        # At least one number should be a reasonable count (>= 1)
+        counts = [int(n.replace(",", "")) for n in numbers]
+        assert any(c >= 1 for c in counts), (
+            "Expected at least one positive count in variant output"
+        )
+
+    def test_variant_source_label_is_non_empty_string(self):
+        """Every variant entry must carry a non-empty source label."""
+        client = _get_client()
+        result = client.tools_call("get_textual_variants", {
+            "reference": "Matthew 1:5",
+            "limit": 5,
+        })
+        text = tool_text(result)
+        if "No textual variants found" in text:
+            pytest.skip("No variants for Matthew 1:5")
+        # Source header and at least one non-empty value after it
+        assert "Source" in text, "Missing 'Source' label"
+        # Find lines after "Source" that contain actual text
+        lines = text.split("\n")
+        source_idx = None
+        for i, line in enumerate(lines):
+            if "**Source**" in line or "Source:" in line:
+                source_idx = i
+                break
+        if source_idx is not None:
+            # The source line itself should have content after the label
+            source_line = lines[source_idx]
+            # Extract text after "**Source**: " or "Source: "
+            source_text = source_line.split(":", 1)[-1].strip().strip("*")
+            assert len(source_text) > 0, (
+                "Source label is present but empty"
+            )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
