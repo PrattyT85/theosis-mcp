@@ -51,7 +51,12 @@ cd /home/hermes/repos/theosis-oracc-mcp
 ORACC_LIVE=1 uv run python scripts/smoke_live.py
 ```
 
-During deployment verification, `projects.json` was reachable, but the current
+This host's Python trust store needed the public InCommon RSA Server CA 2
+intermediate added to a local bundle at
+`/home/hermes/.cache/oracc-ca-bundle.pem`; the profile passes that path as
+`SSL_CERT_FILE`. Do not disable TLS verification.
+
+After that trust-store fix, `projects.json` was reachable, but the current
 ORACC host returned empty bodies for project `manifest.json`, `metadata.json`,
 `catalogue.json`, and corpus JSON requests from this environment. The wrapper
 therefore correctly reports malformed/empty upstream responses rather than
