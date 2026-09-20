@@ -148,7 +148,9 @@ def _parse_reading(line):
     The ']' delimiter separates the Greek text from witness sigla.
     Unknown tokens are preserved as-is rather than discarded.
     """
-    line = line.strip()
+    # VarApp IMP lines can contain SWORD/OSIS markup around the Greek and
+    # superscripted witness sigla; remove it before splitting the reading.
+    line = strip_osis(line)
     if "]" not in line:
         return line, ""
     # Split on first ']' only — readings may contain multiple ']' in theory
