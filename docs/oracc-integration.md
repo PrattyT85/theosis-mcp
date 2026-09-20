@@ -3,7 +3,7 @@
 The Theosis research profile can launch the read-only ORACC wrapper from:
 
 - Repository: https://github.com/PrattyT85/theosis-oracc-mcp
-- Pinned source commit: `32746cf360d9fa486f672406ff53023e9be6454d`
+- Pinned source commit: `26f379a` (archive-backed implementation)
 - Local checkout: `/home/hermes/repos/theosis-oracc-mcp`
 - Transport: local stdio; no HTTP port
 - Source: https://oracc.museum.upenn.edu/
@@ -56,16 +56,16 @@ intermediate added to a local bundle at
 `/home/hermes/.cache/oracc-ca-bundle.pem`; the profile passes that path as
 `SSL_CERT_FILE`. Do not disable TLS verification.
 
-After that trust-store fix, `projects.json` was reachable, but the current
-ORACC host returned empty bodies for project `manifest.json`, `metadata.json`,
-`catalogue.json`, and corpus JSON requests from this environment. The wrapper
-therefore correctly reports malformed/empty upstream responses rather than
-inventing text. This is an upstream availability/data-serving issue, not a
-successful corpus smoke test. Re-run the live smoke test before relying on
-project-level retrieval after ORACC restores those JSON endpoints.
+ORACC's current JSON delivery is archive-based. The wrapper uses
+`https://oracc.museum.upenn.edu/json/<project-archive>.zip`, extracts only the
+requested bounded member in memory, and preserves the archive URL plus member
+path as provenance. The live smoke test passed against the `rimanum` archive:
+144 projects discovered, 378 catalogue entries, and non-empty CDL text
+retrieved from `P296047`.
 
-The local MCP handshake and tool discovery do not require ORACC to be online;
-individual content tools do.
+Some catalogue entries are zero-byte witnesses; the smoke test skips those and
+selects the first non-empty text. The local MCP handshake and tool discovery do
+not require ORACC to be online; individual content tools do.
 
 ## Attribution and licensing
 
