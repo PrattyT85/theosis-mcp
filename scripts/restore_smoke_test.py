@@ -50,7 +50,13 @@ def main() -> int:
             "--encoding=UTF8", "--lc-collate=C", "--lc-ctype=C", "--owner=theosis", database,
         )
         created = True
-        run("runuser", "-u", "postgres", "--", "pg_restore", "--exit-on-error", "--no-owner", "--no-privileges", "--dbname", database, str(backup))
+        readable_backup = Path("/var/lib/postgresql") / backup.name
+        run("cp", str(backup), str(readable_backup))
+        run("chown", "postgres:postgres", str(readable_backup))
+        try:
+            run("runuser", "-u", "postgres", "--", "pg_restore", "--exit-on-error", "--no-owner", "--no-privileges", "--dbname", database, str(readable_backup))
+        finally:
+            readable_backup.unlink(missing_ok=True)
         run("runuser", "-u", "postgres", "--", "psql", "-d", database, "-v", "ON_ERROR_STOP=1", "-c", "GRANT USAGE ON SCHEMA public TO theosis; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO theosis; GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO theosis;")
 
         if query(database, "SELECT current_setting('server_encoding');") != "UTF8":
