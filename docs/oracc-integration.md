@@ -3,7 +3,7 @@
 The Theosis research profile can launch the read-only ORACC wrapper from:
 
 - Repository: https://github.com/PrattyT85/theosis-oracc-mcp
-- Pinned source commit: `26f379a` (archive-backed implementation)
+- Pinned source commit: `437642a` (archive-backed implementation)
 - Local checkout: `/home/hermes/repos/theosis-oracc-mcp`
 - Transport: local stdio; no HTTP port
 - Source: https://oracc.museum.upenn.edu/
