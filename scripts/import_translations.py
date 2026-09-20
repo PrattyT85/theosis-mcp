@@ -151,6 +151,10 @@ HISTORICAL = {
     "TR": ("Textus Receptus", "grc", "CC BY-NC-SA 4.0"),
     "Vulgate": ("Latin Vulgate", "la", "Public Domain"),
     "VulgClementine": ("Clementine Vulgate", "la", "Public Domain"),
+    "Peshitta": ("Syriac Peshitta", "syr", "Public Domain"),
+    "CopSahBible2": ("Sahidic Bible 2", "cop-sa", "CC BY-SA"),
+    "Wulfila": ("Bishop Wulfila Gothic Bible", "got", "Public Domain"),
+    "HebModern": ("Modern Hebrew Bible", "he", "Licence not specified"),
 }
 
 TRANSLATIONS: dict[str, dict[str, Any]] = {
