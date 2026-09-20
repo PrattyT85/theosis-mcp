@@ -84,6 +84,9 @@ The importer preserves non-canonical books when the source edition includes them
 | `search_extra_biblical` | Search Church Fathers, Apocrypha, Pseudepigrapha |
 | `get_extra_biblical_text` | Read specific extra-biblical texts |
 | `get_reading_plan` | Generate structured Bible reading plans |
+| `list_theological_works` | List imported systematic theology works |
+| `search_theological_works` | Search systematic theology by doctrine or phrase |
+| `get_theological_section` | Retrieve a full systematic theology section |
 
 ## Credits
 

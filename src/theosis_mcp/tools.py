@@ -454,4 +454,54 @@ Returns the top 100 authors in the commentary database, grouped by tradition cat
             "properties": {}
         }
     ),
+    Tool(
+        name="list_theological_works",
+        annotations=ToolAnnotations(title="List Theological Works", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""List systematic theology works currently available in Theosis.
+
+Returns authors, work titles, volumes, section counts, and source URLs.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "author": {"type": "string", "description": "Optional author filter"},
+                "limit": {"type": "integer", "description": "Maximum works to return. Default: 100"}
+            }
+        }
+    ),
+    Tool(
+        name="search_theological_works",
+        annotations=ToolAnnotations(title="Search Theological Works", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Search imported systematic theology sections by doctrine, phrase, author, or work.
+
+Returns ranked snippets with the exact section and source URL. Use get_theological_section
+when the full section text is needed.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Doctrine, phrase, or topic to search"},
+                "author": {"type": "string", "description": "Optional author filter"},
+                "limit": {"type": "integer", "description": "Maximum results. Default: 10"}
+            },
+            "required": ["query"]
+        }
+    ),
+    Tool(
+        name="get_theological_section",
+        annotations=ToolAnnotations(title="Get Theological Section", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Retrieve full systematic theology sections by work, author, chapter, or section.
+
+Cites the work structure and source URL. Use search_theological_works first when the exact
+section name is unknown.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "work_title": {"type": "string", "description": "Work title, such as 'Systematic Theology'"},
+                "author": {"type": "string", "description": "Optional author filter"},
+                "chapter": {"type": "string", "description": "Optional chapter title"},
+                "section": {"type": "string", "description": "Optional section title"},
+                "limit": {"type": "integer", "description": "Maximum sections. Default: 5"}
+            },
+            "required": ["work_title"]
+        }
+    ),
 ]

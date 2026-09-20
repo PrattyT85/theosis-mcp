@@ -770,6 +770,78 @@ async def handle_get_reading_plan(args: dict[str, Any]) -> list[TextContent]:
 
 
 # =============================================================================
+# Systematic theology handlers
+# =============================================================================
+
+async def handle_list_theological_works(args: dict[str, Any]) -> list[TextContent]:
+    author = args.get("author")
+    limit = args.get("limit", 100)
+    works = await db.list_theological_works(author=author, limit=limit)
+    if not works:
+        return text("No systematic theology works found.")
+
+    result = "## Systematic Theology Works\n\n"
+    result += "| Author | Work | Sections | Source |\n|---|---|---:|---|\n"
+    for work in works:
+        source = work.get("source_url") or ""
+        result += f"| {work.get('author', '')} | {work.get('work_title', '')} | {work.get('section_count', 0)} | {source} |\n"
+    result += f"\n{len(works)} work/author entries shown.\n"
+    return text(result)
+
+
+async def handle_search_theological_works(args: dict[str, Any]) -> list[TextContent]:
+    query = args.get("query", "")
+    author = args.get("author")
+    limit = args.get("limit", 10)
+    if not query:
+        return text("Please provide a theological search query.")
+
+    results = await db.search_theological_works(query, author=author, limit=limit)
+    if not results:
+        return text(f"No systematic theology sections found for '{query}'.")
+
+    result = f"## Systematic Theology Search: {query}\n\n"
+    for item in results:
+        result += f"### {item.get('work_title', '')} — {item.get('author', '')}\n"
+        structure = " — ".join(str(item.get(k) or "") for k in ("volume", "part", "chapter", "section"))
+        result += f"*{structure.strip(' — ')}*\n\n"
+        result += f"{item.get('snippet', '')}\n\n"
+        if item.get("source_url"):
+            result += f"Source: {item['source_url']}\n\n"
+        result += "---\n\n"
+    return text(result)
+
+
+async def handle_get_theological_section(args: dict[str, Any]) -> list[TextContent]:
+    work_title = args.get("work_title", "")
+    if not work_title:
+        return text("Please provide a theological work title.")
+    sections = await db.get_theological_sections(
+        work_title=work_title,
+        author=args.get("author"),
+        chapter=args.get("chapter"),
+        section=args.get("section"),
+        limit=args.get("limit", 5),
+    )
+    if not sections:
+        return text(f"No sections found for '{work_title}'.")
+
+    result = f"## {work_title}\n\n"
+    for item in sections:
+        result += f"### {item.get('author', '')}"
+        if item.get("volume"):
+            result += f" — {item['volume']}"
+        result += "\n"
+        for key in ("part", "chapter", "section"):
+            if item.get(key):
+                result += f"**{key.title()}**: {item[key]}\n"
+        if item.get("source_url"):
+            result += f"**Source**: {item['source_url']}\n"
+        result += "\n" + _truncate(item.get("text", ""), 14000) + "\n\n---\n\n"
+    return text(result)
+
+
+# =============================================================================
 # Tool handler dispatch table
 # =============================================================================
 
@@ -866,6 +938,9 @@ _TOOL_HANDLERS = {
     "get_reading_plan": handle_get_reading_plan,
     "get_commentary": handle_get_commentary,
     "list_commentary_authors": handle_list_commentary_authors,
+    "list_theological_works": handle_list_theological_works,
+    "search_theological_works": handle_search_theological_works,
+    "get_theological_section": handle_get_theological_section,
 }
 
 # =============================================================================

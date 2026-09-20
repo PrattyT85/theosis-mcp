@@ -757,6 +757,82 @@ class TheosisDB:
         return results
 
     # =========================================================================
+    # Systematic theology works
+    # =========================================================================
+
+    async def list_theological_works(self, author: str | None = None, limit: int = 100) -> list[dict]:
+        """List imported systematic theology works and section counts."""
+        sql = """
+            SELECT work_title, author, COUNT(*) AS section_count,
+                   MIN(source_url) AS source_url
+            FROM theological_works
+        """
+        params: list[Any] = []
+        if author:
+            sql += " WHERE author ILIKE $1"
+            params.append(f"%{author}%")
+        sql += " GROUP BY work_title, author ORDER BY author, work_title LIMIT $" + str(len(params) + 1)
+        params.append(min(max(limit, 1), 200))
+        try:
+            return await self._fetchall(sql, *params)
+        except Exception:
+            return []
+
+    async def search_theological_works(
+        self, query: str, author: str | None = None, limit: int = 10
+    ) -> list[dict]:
+        """Search systematic theology section text with ranked snippets."""
+        sql = """
+            SELECT id, work_title, author, volume, part, chapter, section, source_url,
+                   ts_headline('english', text, plainto_tsquery('english', $1),
+                               'MaxWords=60, MinWords=20, MaxFragments=2') AS snippet,
+                   ts_rank(to_tsvector('english', text), plainto_tsquery('english', $1)) AS rank
+            FROM theological_works
+            WHERE to_tsvector('english', text) @@ plainto_tsquery('english', $1)
+        """
+        params: list[Any] = [query]
+        if author:
+            sql += " AND author ILIKE $2"
+            params.append(f"%{author}%")
+        sql += " ORDER BY rank DESC LIMIT $" + str(len(params) + 1)
+        params.append(min(max(limit, 1), 50))
+        try:
+            return await self._fetchall(sql, *params)
+        except Exception:
+            return []
+
+    async def get_theological_sections(
+        self,
+        work_title: str,
+        author: str | None = None,
+        chapter: str | None = None,
+        section: str | None = None,
+        limit: int = 5,
+    ) -> list[dict]:
+        """Retrieve full systematic theology sections by structure."""
+        sql = """
+            SELECT id, work_title, author, volume, part, chapter, section, text, source_url
+            FROM theological_works
+            WHERE work_title ILIKE $1
+        """
+        params: list[Any] = [f"%{work_title}%"]
+        if author:
+            sql += " AND author ILIKE $" + str(len(params) + 1)
+            params.append(f"%{author}%")
+        if chapter:
+            sql += " AND chapter ILIKE $" + str(len(params) + 1)
+            params.append(f"%{chapter}%")
+        if section:
+            sql += " AND section ILIKE $" + str(len(params) + 1)
+            params.append(f"%{section}%")
+        sql += " ORDER BY id LIMIT $" + str(len(params) + 1)
+        params.append(min(max(limit, 1), 20))
+        try:
+            return await self._fetchall(sql, *params)
+        except Exception:
+            return []
+
+    # =========================================================================
     # NEW: Extra-biblical texts (theosis-specific)
     # =========================================================================
 
