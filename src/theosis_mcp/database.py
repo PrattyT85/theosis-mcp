@@ -899,6 +899,13 @@ class TheosisDB:
             ORDER BY tv.id
             LIMIT $2
         """, normalized, limit)
+        for row in rows:
+            if isinstance(row.get("witnesses"), str):
+                try:
+                    row["witnesses"] = json.loads(row["witnesses"])
+                except json.JSONDecodeError:
+                    row["witnesses"] = []
+        return rows
 
     async def list_manuscript_witnesses(
         self,
@@ -1011,9 +1018,15 @@ class TheosisDB:
             LIMIT $2
         """, normalized, limit)
 
-        # Enrich each row with split witness lists
+        # Enrich each row with split witness lists. PostgreSQL's json type may
+        # arrive through asyncpg as a JSON string rather than a Python list.
         for row in rows:
             witnesses = row.get("witnesses") or []
+            if isinstance(witnesses, str):
+                try:
+                    witnesses = json.loads(witnesses)
+                except json.JSONDecodeError:
+                    witnesses = []
             row["base_support"] = [
                 w["manuscript"] for w in witnesses if w.get("reading_support") == "base"
             ]
