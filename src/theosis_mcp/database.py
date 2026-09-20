@@ -82,6 +82,18 @@ BOOK_ABBREV_MAP = {
     "3 john": "3Jn", "3jn": "3Jn",
     "jude": "Jud",
     "revelation": "Rev", "rev": "Rev",
+    # Deuterocanonical and other historical books present in the Vulgate.
+    "tobit": "Tob", "tob": "Tob",
+    "judith": "Jdt", "jdt": "Jdt",
+    "wisdom": "Wis", "wis": "Wis",
+    "sirach": "Sir", "sir": "Sir", "ecclesiasticus": "Sir",
+    "baruch": "Bar", "bar": "Bar",
+    "1 maccabees": "1Ma", "1maccabees": "1Ma", "1mac": "1Ma",
+    "2 maccabees": "2Ma", "2maccabees": "2Ma", "2mac": "2Ma",
+    "1 esdras": "1Esd", "1esdras": "1Esd",
+    "2 esdras": "2Esd", "2esdras": "2Esd",
+    "prayer of manasses": "PrMan", "prayer of manasseh": "PrMan",
+    "laodiceans": "EpLao", "additional psalm": "Psa151",
 }
 
 # Reverse map: abbreviation -> full name
@@ -105,6 +117,10 @@ BOOK_NAMES = {
     "Phm": "Philemon", "Heb": "Hebrews", "Jas": "James",
     "1Pe": "1 Peter", "2Pe": "2 Peter", "1Jn": "1 John", "2Jn": "2 John",
     "3Jn": "3 John", "Jud": "Jude", "Rev": "Revelation",
+    "Tob": "Tobit", "Jdt": "Judith", "Wis": "Wisdom", "Sir": "Sirach",
+    "Bar": "Baruch", "1Ma": "1 Maccabees", "2Ma": "2 Maccabees",
+    "1Esd": "1 Esdras", "2Esd": "2 Esdras", "PrMan": "Prayer of Manasses",
+    "EpLao": "Laodiceans", "Psa151": "Additional Psalm",
 }
 
 # Book order for sorting
