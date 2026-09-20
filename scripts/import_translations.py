@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """
-Import Scrollmapper Bible translations into Theosis PostgreSQL.
+Import Scrollmapper Bible editions into Theosis PostgreSQL.
 
-The current Scrollmapper export is one flat CSV per translation:
+The current Scrollmapper export is one flat CSV per edition:
 formats/csv/<abbreviation>.csv with columns Book, Chapter, Verse, Text.
-The importer keeps only the 66 Protestant-canon books in the Theosis
-bible_books/bible_verses tables; unknown books in editions such as KJVA are
-reported and skipped rather than silently mis-mapped.
+The importer preserves language, source licence, canon coverage, and
+non-canonical books such as the Vulgate deuterocanonical texts.
 
 Examples:
   python3 scripts/import_translations.py --list-available
   python3 scripts/import_translations.py --download --translations KJV,KJVPCE
-  python3 scripts/import_translations.py --data-dir /path/to/csv --translations KJV
+  python3 scripts/import_translations.py --download --translations WLC,StatResGNT,Vulgate
+  python3 scripts/import_translations.py --download --translations KJV --dry-run
 
-Data source: https://github.com/scrollmapper/bible_databases (MIT repository;
-individual editions retain their own source licence metadata).
+Data source: https://github.com/scrollmapper/bible_databases
 """
 
 from __future__ import annotations
@@ -26,6 +25,7 @@ import io
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import asyncpg
 import httpx
@@ -36,7 +36,7 @@ DB_URL = os.environ.get(
 )
 BASE_URL = "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/formats/csv"
 
-# Protestant canon book order (66 books) with OSIS abbreviations.
+# Standard Protestant canon, with OSIS abbreviations.
 BOOK_ORDER = [
     ("Genesis", "Gen", "OT", 1), ("Exodus", "Exo", "OT", 2),
     ("Leviticus", "Lev", "OT", 3), ("Numbers", "Num", "OT", 4),
@@ -78,81 +78,102 @@ def canonical(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
-BOOK_BY_NAME = {canonical(name): osis for name, osis, _, _ in BOOK_ORDER}
-BOOK_BY_NAME.update({
-    canonical("Psalm"): "Psa",
-    canonical("Proverb"): "Pro",
-    canonical("Song of Songs"): "Sng",
-    canonical("Revelation of John"): "Rev",
-    canonical("I Samuel"): "1Sa",
-    canonical("II Samuel"): "2Sa",
-    canonical("I Kings"): "1Ki",
-    canonical("II Kings"): "2Ki",
-    canonical("I Chronicles"): "1Ch",
-    canonical("II Chronicles"): "2Ch",
-    canonical("I Corinthians"): "1Co",
-    canonical("II Corinthians"): "2Co",
-    canonical("I Thessalonians"): "1Th",
-    canonical("II Thessalonians"): "2Th",
-    canonical("I Timothy"): "1Ti",
-    canonical("II Timothy"): "2Ti",
-    canonical("I Peter"): "1Pe",
-    canonical("II Peter"): "2Pe",
-    canonical("I John"): "1Jn",
-    canonical("II John"): "2Jn",
-    canonical("III John"): "3Jn",
+CANONICAL_BOOKS = {canonical(name): (name, osis, testament, number)
+                   for name, osis, testament, number in BOOK_ORDER}
+CANONICAL_BOOKS.update({
+    canonical("Psalm"): ("Psalms", "Psa", "OT", 19),
+    canonical("Proverb"): ("Proverbs", "Pro", "OT", 20),
+    canonical("Song of Songs"): ("Song of Solomon", "Sng", "OT", 22),
+    canonical("Revelation of John"): ("Revelation", "Rev", "NT", 66),
+    canonical("I Samuel"): ("1 Samuel", "1Sa", "OT", 9),
+    canonical("II Samuel"): ("2 Samuel", "2Sa", "OT", 10),
+    canonical("I Kings"): ("1 Kings", "1Ki", "OT", 11),
+    canonical("II Kings"): ("2 Kings", "2Ki", "OT", 12),
+    canonical("I Chronicles"): ("1 Chronicles", "1Ch", "OT", 13),
+    canonical("II Chronicles"): ("2 Chronicles", "2Ch", "OT", 14),
+    canonical("I Corinthians"): ("1 Corinthians", "1Co", "NT", 46),
+    canonical("II Corinthians"): ("2 Corinthians", "2Co", "NT", 47),
+    canonical("I Thessalonians"): ("1 Thessalonians", "1Th", "NT", 52),
+    canonical("II Thessalonians"): ("2 Thessalonians", "2Th", "NT", 53),
+    canonical("I Timothy"): ("1 Timothy", "1Ti", "NT", 54),
+    canonical("II Timothy"): ("2 Timothy", "2Ti", "NT", 55),
+    canonical("I Peter"): ("1 Peter", "1Pe", "NT", 60),
+    canonical("II Peter"): ("2 Peter", "2Pe", "NT", 61),
+    canonical("I John"): ("1 John", "1Jn", "NT", 62),
+    canonical("II John"): ("2 John", "2Jn", "NT", 63),
+    canonical("III John"): ("3 John", "3Jn", "NT", 64),
 })
 
-# English editions currently present in Scrollmapper's 140-entry catalogue.
-# This replaces the former list, which contained several stale/non-Scrollmapper
-# abbreviations and omitted several real English files.
-ALL_TRANSLATIONS = {
-    "ACV": "A Conservative Version",
-    "AKJV": "American King James Version",
-    "ASV": "American Standard Version",
-    "Anderson": "Anderson New Testament",
-    "BBE": "Bible in Basic English",
-    "BSB": "Berean Standard Bible",
-    "CPDV": "Catholic Public Domain Version",
-    "DRC": "Douay-Rheims Bible, Challoner Revision",
-    "Darby": "Darby Bible",
-    "Geneva1599": "Geneva Bible (1599)",
-    "Haweis": "Thomas Haweis New Testament",
-    "JPS": "Jewish Publication Society 1917",
-    "Jubilee2000": "Jubilee Bible 2000",
-    "KJV": "King James Version",
-    "KJVA": "King James Version (Apocrypha)",
-    "KJVPCE": "King James Version: Pure Cambridge Edition",
-    "LEB": "Lexham English Bible",
-    "LITV": "Green's Literal Translation",
-    "MKJV": "Modern King James Version",
-    "NHEB": "New Heart English Bible",
-    "NHEBJE": "New Heart English Bible: Jehovah Edition",
-    "NHEBME": "New Heart English Bible: Messianic Edition",
-    "Noyes": "Noyes Translation",
-    "OEB": "Open English Bible (US Spelling)",
-    "OEBcth": "Open English Bible (Commonwealth Spelling)",
-    "RLT": "Revised Literal Translation",
-    "RNKJV": "Restored Name King James Version",
-    "RWebster": "Revised Webster Version",
-    "Rotherham": "Rotherham's Emphasized Bible",
-    "Twenty": "Twentieth Century New Testament",
-    "Tyndale": "William Tyndale Bible",
-    "UKJV": "Updated King James Version",
-    "Webster": "Webster Bible",
-    "YLT": "Young's Literal Translation",
+# Stable OSIS-like identifiers for common deuterocanonical and other books.
+EXTRA_BOOKS = {
+    "tobit": ("Tobit", "Tob", "APO"),
+    "judith": ("Judith", "Jdt", "APO"),
+    "wisdom": ("Wisdom", "Wis", "APO"),
+    "sirach": ("Sirach", "Sir", "APO"),
+    "baruch": ("Baruch", "Bar", "APO"),
+    "imaccabees": ("1 Maccabees", "1Ma", "APO"),
+    "iimaccabees": ("2 Maccabees", "2Ma", "APO"),
+    "iesdras": ("1 Esdras", "1Esd", "APO"),
+    "iiesdras": ("2 Esdras", "2Esd", "APO"),
+    "prayerofmanasses": ("Prayer of Manasses", "PrMan", "APO"),
+    "prayerofmanasseh": ("Prayer of Manasseh", "PrMan", "APO"),
+    "laodiceans": ("Laodiceans", "EpLao", "APO"),
+    "additionalsalm": ("Additional Psalm", "Psa151", "APO"),
 }
 
-TRANSLATION_METADATA = {
-    "KJV": ("en", "GPL", "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/sources/en/KJV/README.md"),
-    "KJVPCE": ("en", "Public Domain", "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/sources/en/KJVPCE/README.md"),
-    "NHEBJE": ("en", "Public Domain", "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/sources/en/NHEBJE/README.md"),
-    "NHEBME": ("en", "Public Domain", "https://raw.githubusercontent.com/scrollmapper/bible_databases/master/sources/en/NHEBME/README.md"),
+# English editions in Scrollmapper's 140-edition catalogue.
+ENGLISH = {
+    "ACV": "A Conservative Version", "AKJV": "American King James Version",
+    "ASV": "American Standard Version", "Anderson": "Anderson New Testament",
+    "BBE": "Bible in Basic English", "BSB": "Berean Standard Bible",
+    "CPDV": "Catholic Public Domain Version", "DRC": "Douay-Rheims Bible, Challoner Revision",
+    "Darby": "Darby Bible", "Geneva1599": "Geneva Bible (1599)",
+    "Haweis": "Thomas Haweis New Testament", "JPS": "Jewish Publication Society 1917",
+    "Jubilee2000": "Jubilee Bible 2000", "KJV": "King James Version",
+    "KJVA": "King James Version (Apocrypha)", "KJVPCE": "King James Version: Pure Cambridge Edition",
+    "LEB": "Lexham English Bible", "LITV": "Green's Literal Translation",
+    "MKJV": "Modern King James Version", "NHEB": "New Heart English Bible",
+    "NHEBJE": "New Heart English Bible: Jehovah Edition", "NHEBME": "New Heart English Bible: Messianic Edition",
+    "Noyes": "Noyes Translation", "OEB": "Open English Bible (US Spelling)",
+    "OEBcth": "Open English Bible (Commonwealth Spelling)", "RLT": "Revised Literal Translation",
+    "RNKJV": "Restored Name King James Version", "RWebster": "Revised Webster Version",
+    "Rotherham": "Rotherham's Emphasized Bible", "Twenty": "Twentieth Century New Testament",
+    "Tyndale": "William Tyndale Bible", "UKJV": "Updated King James Version",
+    "Webster": "Webster Bible", "YLT": "Young's Literal Translation",
 }
+
+# Historical-language editions selected for the first non-English batch.
+HISTORICAL = {
+    "WLC": ("Westminster Leningrad Codex", "hbo", "Public Domain"),
+    "SP": ("Samaritan Pentateuch", "hbo", "Copyrighted; Free non-commercial distribution"),
+    "StatResGNT": ("Statistical Restoration Greek New Testament", "grc", "CC BY 4.0"),
+    "Byz": ("Byzantine Textform 2013", "grc", "CC BY-NC-SA 4.0"),
+    "TR": ("Textus Receptus", "grc", "CC BY-NC-SA 4.0"),
+    "Vulgate": ("Latin Vulgate", "la", "Public Domain"),
+    "VulgClementine": ("Clementine Vulgate", "la", "Public Domain"),
+}
+
+TRANSLATIONS: dict[str, dict[str, Any]] = {
+    key: {
+        "name": value,
+        "language": "en",
+        "license": "See source metadata",
+        "source_url": f"{BASE_URL}/{key}.csv",
+    }
+    for key, value in ENGLISH.items()
+}
+for key, (name, language, license_name) in HISTORICAL.items():
+    TRANSLATIONS[key] = {
+        "name": name,
+        "language": language,
+        "license": license_name,
+        "source_url": f"{BASE_URL}/{key}.csv",
+    }
+
+ALL_TRANSLATIONS = {key: meta["name"] for key, meta in TRANSLATIONS.items()}
 
 
 async def download_translation(client: httpx.AsyncClient, translation: str) -> str | None:
-    """Download one flat Scrollmapper CSV."""
     response = await client.get(f"{BASE_URL}/{translation}.csv")
     if response.status_code == 404:
         return None
@@ -167,8 +188,21 @@ def read_translation_file(csv_dir: Path, translation: str) -> str | None:
     return path.read_text(encoding="utf-8-sig")
 
 
-def parse_rows(content: str) -> tuple[list[tuple[str, int, int, str]], set[str], set[str]]:
-    """Return canonical rows, mapped OSIS books, and unknown source books."""
+def resolve_book(source_book: str, discovered_extra: dict[str, tuple[str, str, str, int]]):
+    key = canonical(source_book)
+    if key in CANONICAL_BOOKS:
+        return CANONICAL_BOOKS[key]
+    if key in EXTRA_BOOKS:
+        name, osis, testament = EXTRA_BOOKS[key]
+    else:
+        name, osis, testament = source_book, f"Src_{key}", "OTHER"
+    if osis not in discovered_extra:
+        discovered_extra[osis] = (name, osis, testament, 1000 + len(discovered_extra))
+    return discovered_extra[osis]
+
+
+def parse_rows(content: str):
+    """Return rows and the source-book catalogue discovered in the CSV."""
     reader = csv.DictReader(io.StringIO(content))
     if not reader.fieldnames:
         raise ValueError("CSV has no header")
@@ -178,15 +212,13 @@ def parse_rows(content: str) -> tuple[list[tuple[str, int, int, str]], set[str],
         raise ValueError(f"CSV header must contain Book, Chapter, Verse, Text; got {reader.fieldnames}")
 
     rows = []
-    books = set()
-    unknown = set()
+    book_specs: dict[str, tuple[str, str, str, int]] = {}
+    discovered_extra: dict[str, tuple[str, str, str, int]] = {}
     for raw in reader:
         source_book = (raw.get(fields["book"]) or "").strip()
-        osis = BOOK_BY_NAME.get(canonical(source_book))
-        if not osis:
-            if source_book:
-                unknown.add(source_book)
+        if not source_book:
             continue
+        name, osis, testament, number = resolve_book(source_book, discovered_extra)
         try:
             chapter = int(raw[fields["chapter"]])
             verse = int(raw[fields["verse"]])
@@ -195,19 +227,18 @@ def parse_rows(content: str) -> tuple[list[tuple[str, int, int, str]], set[str],
         text = raw.get(fields["text"]) or ""
         if not text.strip():
             continue
+        book_specs[osis] = (name, osis, testament, number)
         rows.append((osis, chapter, verse, text))
-        books.add(osis)
-    return rows, books, unknown
+    return rows, book_specs
 
 
 async def import_translation(
     conn: asyncpg.Connection,
     abbrev: str,
-    name: str,
+    metadata: dict[str, Any],
     csv_dir: Path | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> int:
-    """Import one flat CSV into theosis, skipping an existing abbreviation."""
     existing = await conn.fetchval(
         "SELECT id FROM bible_translations WHERE abbreviation = $1", abbrev
     )
@@ -225,28 +256,26 @@ async def import_translation(
         print(f"  [{abbrev}] Source CSV not found, skipping")
         return 0
 
-    rows, books, unknown = parse_rows(content)
+    rows, book_specs = parse_rows(content)
     if not rows:
-        print(f"  [{abbrev}] No non-empty canonical rows, skipping")
+        print(f"  [{abbrev}] No non-empty rows, skipping")
         return 0
-
-    language, license_name, source_url = TRANSLATION_METADATA.get(
-        abbrev, ("en", "See source metadata", f"{BASE_URL}/{abbrev}.csv")
+    description = (
+        f"Scrollmapper import; {len(book_specs)} source books; "
+        f"{len(rows):,} non-empty verses"
     )
-    description = f"Scrollmapper import; {len(books)}/66 canonical books; {len(rows):,} verses"
-    if unknown:
-        description += f"; skipped source books: {', '.join(sorted(unknown))}"
 
     async with conn.transaction():
         trans_id = await conn.fetchval(
             """INSERT INTO bible_translations
                (abbreviation, name, language, license, description, source_url)
                VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
-            abbrev, name, language, license_name, description, source_url,
+            abbrev, metadata["name"], metadata["language"], metadata["license"],
+            description, metadata["source_url"],
         )
 
         book_ids = {}
-        for book_name, osis, testament, book_num in BOOK_ORDER:
+        for name, osis, testament, book_number in book_specs.values():
             book_id = await conn.fetchval(
                 "SELECT id FROM bible_books WHERE translation_id = $1 AND osis_ref = $2",
                 trans_id, osis,
@@ -256,64 +285,63 @@ async def import_translation(
                     """INSERT INTO bible_books
                        (translation_id, name, testament, book_number, osis_ref)
                        VALUES ($1, $2, $3, $4, $5) RETURNING id""",
-                    trans_id, book_name, testament, book_num, osis,
+                    trans_id, name, testament, book_number, osis,
                 )
             book_ids[osis] = book_id
 
-        db_rows = [(book_ids[osis], chapter, verse, text)
-                   for osis, chapter, verse, text in rows]
         await conn.copy_records_to_table(
             "bible_verses",
-            records=db_rows,
+            records=[(book_ids[osis], chapter, verse, text)
+                     for osis, chapter, verse, text in rows],
             columns=["book_id", "chapter", "verse", "text"],
         )
 
-    print(f"  [{abbrev}] Imported {len(rows):,} verses across {len(books)}/66 books")
+    print(f"  [{abbrev}] Imported {len(rows):,} verses across {len(book_specs)} source books")
     return len(rows)
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Import Scrollmapper Bible translations")
+    parser = argparse.ArgumentParser(description="Import Scrollmapper Bible editions")
     parser.add_argument("--data-dir", type=Path, help="Directory containing <translation>.csv files")
-    parser.add_argument("--translations", default=None, help="Comma-separated English abbreviations")
+    parser.add_argument("--translations", default=None, help="Comma-separated edition abbreviations")
     parser.add_argument("--download", action="store_true", help="Download flat CSVs from GitHub")
-    parser.add_argument("--list-available", action="store_true", help="List known English source files")
+    parser.add_argument("--list-available", action="store_true", help="List known English and historical editions")
     parser.add_argument("--dry-run", action="store_true", help="Parse and report without writing")
     args = parser.parse_args()
 
     if args.list_available:
-        print("Available English Scrollmapper translations:")
-        for abbrev, name in sorted(ALL_TRANSLATIONS.items()):
-            print(f"  {abbrev:12s} {name}")
+        print("Available Scrollmapper editions:")
+        for abbrev, metadata in sorted(TRANSLATIONS.items()):
+            print(f"  {abbrev:14s} {metadata['language']:5s} {metadata['name']}")
         return
     if not args.data_dir and not args.download:
         parser.error("one of --data-dir or --download is required")
 
     if args.translations:
         wanted = [item.strip() for item in args.translations.split(",") if item.strip()]
-        unknown = sorted(set(wanted) - set(ALL_TRANSLATIONS))
+        unknown = sorted(set(wanted) - set(TRANSLATIONS))
         if unknown:
-            parser.error(f"unknown English translation(s): {', '.join(unknown)}")
-        to_import = {key: ALL_TRANSLATIONS[key] for key in wanted}
+            parser.error(f"unknown edition(s): {', '.join(unknown)}")
+        to_import = {key: TRANSLATIONS[key] for key in wanted}
     else:
-        to_import = ALL_TRANSLATIONS
+        to_import = TRANSLATIONS
 
-    print(f"Processing {len(to_import)} English translations...")
+    print(f"Processing {len(to_import)} editions...")
     conn = await asyncpg.connect(DB_URL)
     try:
-        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=180, follow_redirects=True) as client:
             total = 0
-            for abbrev, name in to_import.items():
-                print(f"[{abbrev}] {name}")
+            for abbrev, metadata in to_import.items():
+                print(f"[{abbrev}] {metadata['name']} ({metadata['language']})")
                 if args.dry_run:
                     content = read_translation_file(args.data_dir, abbrev) if args.data_dir else await download_translation(client, abbrev)
                     if content is None:
                         print("  Source CSV not found, skipping")
                         continue
-                    rows, books, unknown = parse_rows(content)
-                    print(f"  (dry run: {len(rows):,} rows, {len(books)}/66 books, unknown={sorted(unknown)})")
+                    rows, books = parse_rows(content)
+                    print(f"  (dry run: {len(rows):,} rows, {len(books)} source books)")
                     continue
-                total += await import_translation(conn, abbrev, name, args.data_dir, client)
+                total += await import_translation(conn, abbrev, metadata, args.data_dir, client)
     finally:
         await conn.close()
     print(f"\nDone. Total verses imported: {total:,}")
