@@ -33,19 +33,23 @@ uvx theosis-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 
 ## Translation imports
 
-Scrollmapper currently publishes 140 source editions in flat CSV format. Theosis imports them in reviewed batches so each edition can retain its language, coverage, and source licence metadata. The English importer supports the current flat files, for example:
+Scrollmapper currently publishes 140 source editions in flat CSV format. Theosis imports them in reviewed batches so each edition can retain its language, canon coverage, and source licence metadata. The importer supports English and selected historical-language editions, for example:
 
 ```bash
 # From a checkout of this repository
 python3 scripts/import_translations.py --download \\
   --translations KJV,KJVPCE,NHEBJE,NHEBME
 
+# Historical Hebrew, Greek, and Latin editions
+python3 scripts/import_translations.py --download \\
+  --translations WLC,StatResGNT,Vulgate
+
 # Inspect an import without writing to PostgreSQL
 python3 scripts/import_translations.py --download \\
-  --translations KJV --dry-run
+  --translations WLC --dry-run
 ```
 
-Some source editions are partial (for example, New Testament or Psalms-only) and are reported as partial rather than being described as complete Bibles.
+The importer preserves non-canonical books when the source edition includes them. Partial editions (for example, New Testament- or Psalms-only) are reported by their actual source-book coverage rather than being described as complete Bibles.
 
 ## Open WebUI Integration
 
