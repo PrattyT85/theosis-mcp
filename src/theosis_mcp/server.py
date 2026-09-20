@@ -920,6 +920,112 @@ async def handle_list_commentary_authors(args: dict[str, Any]) -> list[TextConte
     return text(result)
 
 
+# =============================================================================
+# Textual Variants & Manuscript Witnesses handlers
+# =============================================================================
+
+async def handle_get_textual_variants(args: dict[str, Any]) -> list[TextContent]:
+    reference = args.get("reference", "")
+    limit = args.get("limit", 20)
+    if not reference:
+        return text("Please provide a Bible reference (e.g., 'John 3:16').")
+    variants = await db.get_textual_variants(reference, limit=limit)
+    if not variants:
+        return text(f"No textual variants found for {reference}.")
+    result = f"## Textual Variants: {reference}\n\n"
+    for v in variants:
+        ref = v.get("reference", reference)
+        result += f"### Variant #{v['id']} ({ref})\n"
+        result += f"**Source**: {v.get('variant_source', '')}\n"
+        result += f"**Base (MT)**: {v.get('mt_reading', '')}\n"
+        if v.get("mt_hebrew"):
+            result += f"**Hebrew**: {v['mt_hebrew']}\n"
+        result += f"**Variant**: {v.get('variant_reading', '')}\n"
+        if v.get("variant_original"):
+            result += f"**Original**: {v['variant_original']}\n"
+        if v.get("variant_significance"):
+            result += f"**Significance**: {v['variant_significance']}\n"
+        if v.get("scholarly_consensus"):
+            result += f"**Consensus**: {v['scholarly_consensus']}\n"
+        if v.get("heiser_analysis"):
+            result += f"**Heiser Analysis**: {v['heiser_analysis']}\n"
+        witnesses = v.get("witnesses") or []
+        if witnesses:
+            base_w = [w["manuscript"] for w in witnesses if w.get("reading_support") == "base"]
+            var_w = [w["manuscript"] for w in witnesses if w.get("reading_support") == "variant"]
+            if base_w:
+                result += f"**Base support**: {', '.join(base_w)}\n"
+            if var_w:
+                result += f"**Variant support**: {', '.join(var_w)}\n"
+        result += "\n---\n\n"
+    return text(result)
+
+
+async def handle_list_manuscript_witnesses(args: dict[str, Any]) -> list[TextContent]:
+    reference = args.get("reference")
+    variant_id = args.get("variant_id")
+    limit = args.get("limit", 50)
+    witnesses = await db.list_manuscript_witnesses(
+        reference=reference, variant_id=variant_id, limit=limit
+    )
+    if not witnesses:
+        msg = "No manuscript witnesses found"
+        if reference:
+            msg += f" for {reference}"
+        if variant_id:
+            msg += f" for variant #{variant_id}"
+        return text(msg + ".")
+    header = "## Manuscript Witnesses\n\n"
+    if reference:
+        header = f"## Manuscript Witnesses: {reference}\n\n"
+    elif variant_id:
+        header = f"## Manuscript Witnesses: Variant #{variant_id}\n\n"
+    result = header
+    for w in witnesses:
+        ref = f"{w.get('book', '')} {w.get('chapter', '')}:{w.get('verse', '')}"
+        result += f"- **{w['manuscript']}** — {ref} ({w.get('reading_support', 'unknown')})"
+        if w.get("manuscript_date"):
+            result += f" [{w['manuscript_date']}]"
+        result += "\n"
+    result += f"\n{len(witnesses)} witness(es).\n"
+    return text(result)
+
+
+async def handle_compare_variant_readings(args: dict[str, Any]) -> list[TextContent]:
+    reference = args.get("reference", "")
+    limit = args.get("limit", 20)
+    if not reference:
+        return text("Please provide a Bible reference (e.g., 'John 3:16').")
+    variants = await db.compare_variant_readings(reference, limit=limit)
+    if not variants:
+        return text(f"No variant readings found for {reference}.")
+    result = f"## Variant Readings Comparison: {reference}\n\n"
+    for v in variants:
+        result += f"### {v.get('variant_source', 'Unknown source')} (#{v['id']})\n"
+        result += f"**MT/Base**: {v.get('mt_reading', '')}\n"
+        if v.get("mt_hebrew"):
+            result += f"**Hebrew**: {v['mt_hebrew']}\n"
+        result += f"**Variant**: {v.get('variant_reading', '')}\n"
+        if v.get("variant_original"):
+            result += f"**Original**: {v['variant_original']}\n"
+        if v.get("variant_significance"):
+            result += f"**Significance**: {v['variant_significance']}\n"
+        if v.get("scholarly_consensus"):
+            result += f"**Consensus**: {v['scholarly_consensus']}\n"
+        if v.get("preferred_for_hlt"):
+            result += f"**Preferred (HLT)**: {v['preferred_for_hlt']}\n"
+        if v.get("hlt_rationale"):
+            result += f"**HLT Rationale**: {v['hlt_rationale']}\n"
+        base = v.get("base_support", [])
+        var = v.get("variant_support", [])
+        if base:
+            result += f"**Base witnesses**: {', '.join(base)}\n"
+        if var:
+            result += f"**Variant witnesses**: {', '.join(var)}\n"
+        result += "\n---\n\n"
+    return text(result)
+
+
 _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
@@ -950,6 +1056,9 @@ _TOOL_HANDLERS = {
     "list_theological_works": handle_list_theological_works,
     "search_theological_works": handle_search_theological_works,
     "get_theological_section": handle_get_theological_section,
+    "get_textual_variants": handle_get_textual_variants,
+    "list_manuscript_witnesses": handle_list_manuscript_witnesses,
+    "compare_variant_readings": handle_compare_variant_readings,
 }
 
 # =============================================================================

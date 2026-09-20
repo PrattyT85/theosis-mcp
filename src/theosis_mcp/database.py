@@ -851,6 +851,178 @@ class TheosisDB:
             return []
 
     # =========================================================================
+    # Textual variants & manuscript witnesses
+    # ==========================================================================
+
+    async def get_textual_variants(
+        self, reference: str, limit: int = 20
+    ) -> list[dict]:
+        """Get textual variants for a verse, joined to manuscript witnesses.
+
+        Returns rows with exact reference, variant source, base/variant readings,
+        significance/consensus, and witness sigla/support when present.
+        """
+        normalized = self._normalize_reference(reference)
+        return await self._fetchall("""
+            SELECT
+                tv.id,
+                tv.reference,
+                tv.book,
+                tv.chapter,
+                tv.verse,
+                tv.mt_reading,
+                tv.mt_hebrew,
+                tv.variant_source,
+                tv.variant_reading,
+                tv.variant_original,
+                tv.variant_significance,
+                tv.scholarly_consensus,
+                tv.heiser_analysis,
+                tv.preferred_for_hlt,
+                tv.hlt_rationale,
+                COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'manuscript', mw.manuscript,
+                                'manuscript_date', mw.manuscript_date,
+                                'reading_support', mw.reading_support
+                            ) ORDER BY mw.manuscript
+                        )
+                        FROM manuscript_witnesses mw
+                        WHERE mw.variant_id = tv.id
+                    ),
+                    '[]'::json
+                ) AS witnesses
+            FROM textual_variants tv
+            WHERE tv.reference = $1
+            ORDER BY tv.id
+            LIMIT $2
+        """, normalized, limit)
+
+    async def list_manuscript_witnesses(
+        self,
+        reference: str | None = None,
+        variant_id: int | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """List manuscript witnesses, optionally filtered by reference or variant_id."""
+        if variant_id is not None:
+            return await self._fetchall("""
+                SELECT
+                    mw.id,
+                    mw.variant_id,
+                    mw.manuscript,
+                    mw.manuscript_date,
+                    mw.reading_support,
+                    tv.reference,
+                    tv.book,
+                    tv.chapter,
+                    tv.verse
+                FROM manuscript_witnesses mw
+                JOIN textual_variants tv ON mw.variant_id = tv.id
+                WHERE mw.variant_id = $1
+                ORDER BY mw.manuscript
+                LIMIT $2
+            """, variant_id, limit)
+
+        if reference is not None:
+            normalized = self._normalize_reference(reference)
+            return await self._fetchall("""
+                SELECT
+                    mw.id,
+                    mw.variant_id,
+                    mw.manuscript,
+                    mw.manuscript_date,
+                    mw.reading_support,
+                    tv.reference,
+                    tv.book,
+                    tv.chapter,
+                    tv.verse
+                FROM manuscript_witnesses mw
+                JOIN textual_variants tv ON mw.variant_id = tv.id
+                WHERE tv.reference = $1
+                ORDER BY mw.variant_id, mw.manuscript
+                LIMIT $2
+            """, normalized, limit)
+
+        # No filter: return all witnesses (capped)
+        return await self._fetchall("""
+            SELECT
+                mw.id,
+                mw.variant_id,
+                mw.manuscript,
+                mw.manuscript_date,
+                mw.reading_support,
+                tv.reference,
+                tv.book,
+                tv.chapter,
+                tv.verse
+            FROM manuscript_witnesses mw
+            JOIN textual_variants tv ON mw.variant_id = tv.id
+            ORDER BY tv.reference, mw.manuscript
+            LIMIT $1
+        """, limit)
+
+    async def compare_variant_readings(
+        self, reference: str, limit: int = 20
+    ) -> list[dict]:
+        """Compare variant readings for a verse, grouped by variant_source.
+
+        For each source (e.g. SBLGNT Apparatus), shows the base (MT) reading,
+        the variant reading, significance, consensus, and witness sigla split
+        into base_support vs variant_support.
+        """
+        normalized = self._normalize_reference(reference)
+        rows = await self._fetchall("""
+            SELECT
+                tv.id,
+                tv.reference,
+                tv.book,
+                tv.chapter,
+                tv.verse,
+                tv.mt_reading,
+                tv.mt_hebrew,
+                tv.variant_source,
+                tv.variant_reading,
+                tv.variant_original,
+                tv.variant_significance,
+                tv.scholarly_consensus,
+                tv.heiser_analysis,
+                tv.preferred_for_hlt,
+                tv.hlt_rationale,
+                COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'manuscript', mw.manuscript,
+                                'manuscript_date', mw.manuscript_date,
+                                'reading_support', mw.reading_support
+                            ) ORDER BY mw.manuscript
+                        )
+                        FROM manuscript_witnesses mw
+                        WHERE mw.variant_id = tv.id
+                    ),
+                    '[]'::json
+                ) AS witnesses
+            FROM textual_variants tv
+            WHERE tv.reference = $1
+            ORDER BY tv.id
+            LIMIT $2
+        """, normalized, limit)
+
+        # Enrich each row with split witness lists
+        for row in rows:
+            witnesses = row.get("witnesses") or []
+            row["base_support"] = [
+                w["manuscript"] for w in witnesses if w.get("reading_support") == "base"
+            ]
+            row["variant_support"] = [
+                w["manuscript"] for w in witnesses if w.get("reading_support") == "variant"
+            ]
+
+        return rows
+    # =========================================================================
     # NEW: Extra-biblical texts (theosis-specific)
     # =========================================================================
 

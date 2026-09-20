@@ -504,4 +504,59 @@ section name is unknown.""",
             "required": ["work_title"]
         }
     ),
+
+    # =========================================================================
+    # Textual Variants & Manuscript Witnesses (read-only)
+    # =========================================================================
+
+    Tool(
+        name="get_textual_variants",
+        annotations=ToolAnnotations(title="Textual Variants", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Get textual variants for a Bible verse, including manuscript witness support.
+
+Returns variant readings from critical apparatus sources (SBLGNT, etc.),
+with base (MT) and variant readings, significance, scholarly consensus,
+and associated manuscript witnesses (WH, Treg, NA, etc.).""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "description": "Bible reference (e.g., 'John 3:16', 'Mat 1:5')"},
+                "limit": {"type": "integer", "description": "Max results. Default: 20"}
+            },
+            "required": ["reference"]
+        }
+    ),
+    Tool(
+        name="list_manuscript_witnesses",
+        annotations=ToolAnnotations(title="Manuscript Witnesses", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""List manuscript witnesses for textual variants, filtered by verse reference or variant ID.
+
+Returns witness sigla (WH, Treg, NA, RP, etc.), reading support (base/variant),
+and associated verse reference. Use without filters to browse all witnesses.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "description": "Bible reference filter (e.g., 'John 3:16')"},
+                "variant_id": {"type": "integer", "description": "Filter by textual variant ID"},
+                "limit": {"type": "integer", "description": "Max results. Default: 50"}
+            }
+        }
+    ),
+    Tool(
+        name="compare_variant_readings",
+        annotations=ToolAnnotations(title="Compare Variant Readings", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Compare variant readings for a verse side-by-side.
+
+Shows base (MT) reading vs. variant reading for each source, with witness
+sigla split into base_support and variant_support lists. Includes
+significance, scholarly consensus, and provenance when present.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "description": "Bible reference (e.g., 'John 3:16', 'Mat 1:5')"},
+                "limit": {"type": "integer", "description": "Max results. Default: 20"}
+            },
+            "required": ["reference"]
+        }
+    ),
 ]
