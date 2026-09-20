@@ -1742,6 +1742,10 @@ ALTER TABLE ONLY public.strongs_verse_map
 ALTER TABLE ONLY public.verse_embeddings
     ADD CONSTRAINT verse_embeddings_verse_id_fkey FOREIGN KEY (verse_id) REFERENCES public.verses(id);
 
+-- Fresh installs restore the schema as postgres; grant the runtime/import role access.
+GRANT USAGE ON SCHEMA public TO theosis;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO theosis;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO theosis;
 
 --
 -- PostgreSQL database dump complete
