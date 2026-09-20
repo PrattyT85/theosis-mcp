@@ -522,6 +522,21 @@ async def handle_get_dictionary_article(args: dict[str, Any]) -> list[TextConten
 # ANE Context
 # =============================================================================
 
+def _parse_json_list_field(value: Any) -> list[str]:
+    """Safely parse a JSON-encoded text list field into a Python list."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if not isinstance(value, str):
+        return []
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, list) else [value]
+    except (json.JSONDecodeError, TypeError):
+        return [value] if value.strip() else []
+
+
 async def handle_get_ane_context(args: dict[str, Any]) -> list[TextContent]:
     reference = args.get("reference", "")
     if not reference:
@@ -533,8 +548,34 @@ async def handle_get_ane_context(args: dict[str, Any]) -> list[TextContent]:
 
     result = f"## Ancient Near East Context: {reference}\n\n"
     for entry in entries:
-        result += f"### {entry.get('dimension', '')} — {entry.get('period', '')}\n"
-        result += f"{entry.get('content', entry.get('description', ''))}\n\n"
+        dim_label = entry.get("dimension_label") or entry.get("dimension", "")
+        period_label = entry.get("period_label") or entry.get("period", "")
+        result += f"### {dim_label} — {period_label}\n"
+        result += f"**Title**: {entry.get('title', '')}\n\n"
+
+        if entry.get("summary"):
+            result += f"**Summary**: {entry['summary']}\n\n"
+        if entry.get("detail"):
+            result += f"**Detail**: {entry['detail']}\n\n"
+
+        ane_parallels = _parse_json_list_field(entry.get("ane_parallels"))
+        if ane_parallels:
+            result += "**ANE Parallels**:\n"
+            for p in ane_parallels:
+                result += f"- {p}\n"
+            result += "\n"
+
+        if entry.get("interpretive_significance"):
+            result += f"**Interpretive Significance**: {entry['interpretive_significance']}\n\n"
+
+        key_refs = _parse_json_list_field(entry.get("key_references"))
+        if key_refs:
+            result += f"**Key References**: {', '.join(key_refs)}\n\n"
+
+        scholarly = _parse_json_list_field(entry.get("scholarly_sources"))
+        if scholarly:
+            result += f"**Scholarly Sources**: {', '.join(scholarly)}\n\n"
+
         result += "---\n\n"
 
     return text(result)

@@ -654,7 +654,11 @@ class TheosisDB:
         book = parts[0]
         return await self._fetchall("""
             SELECT * FROM ane_entries
-            WHERE LOWER(title) LIKE LOWER($1) OR LOWER(summary) LIKE LOWER($1)
+            WHERE LOWER(title) LIKE LOWER($1)
+               OR LOWER(summary) LIKE LOWER($1)
+               OR LOWER(detail) LIKE LOWER($1)
+               OR LOWER(key_references) LIKE LOWER($1)
+               OR LOWER(interpretive_significance) LIKE LOWER($1)
             LIMIT 20
         """, f"%{book}%")
 
