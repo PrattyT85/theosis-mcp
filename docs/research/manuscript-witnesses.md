@@ -53,6 +53,19 @@ Expected parsed values:
 - base sigla: `WH`, `NIV`
 - variant siglum: `Treg`
 
+## Live import status
+
+The parser was validated in a disposable UTF-8 restore before production import. VarApp is now imported into Theosis without truncation:
+
+- Existing SBLGNT Apparatus variants preserved: 6,820.
+- VarApp variants added: 27,668.
+- Total textual variants: 34,508.
+- Backfilled manuscript witnesses: 647,479.
+- The live MCP variant/witness tests pass.
+- The latest pre-import logical backup is retained under `/root/theosis-backups/`.
+
+SBLGNTApp remains copyrighted/free for non-commercial use; VarApp is CC0. Keep both modules and derived research data on the private research host unless the applicable licence permits redistribution.
+
 ## Safe implementation gate
 
 Before writing to the live database:
