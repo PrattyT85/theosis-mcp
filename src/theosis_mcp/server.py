@@ -18,6 +18,7 @@ Supports stdio, SSE, and Streamable HTTP transports.
 import asyncio
 import json
 import logging
+from importlib.metadata import PackageNotFoundError, version as package_version
 import os
 import re
 import sys
@@ -41,13 +42,18 @@ logging.basicConfig(
 logger = logging.getLogger("theosis-mcp")
 
 # Server icon: gold cross on purple
+try:
+    THEOSIS_VERSION = package_version("theosis-mcp")
+except PackageNotFoundError:
+    THEOSIS_VERSION = "0.9.0.dev0"
+
 ICON_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42mNgGOmAEZtgQ9TV/7SwrGGZNiNeB9DKYnwOYcGl6MajG1S1VENOA6s4E4yxounvfw0NDZpYjm4mckgz0drnhMxmIdew5bO3M9w+twfOr5veS5Y5TAOdDUcdMOAOYCE2wWEDqkYueNVEpnpSxwHIqR3ZcmziqMBzNA1QJwqwFTLocT5aEI06YNQBow6gaUGEDUAqGk/qhwCu1iutWsY4+wW0bJYT1S+gZUgMqq7ZKAAA/oE/8EmGTpMAAAAASUVORK5CYII="
 )
 
 server = Server(
     "theosis",
-    version="0.1.0",
+    version=THEOSIS_VERSION,
     icons=[
         Icon(
             src="data:image/png;base64," + ICON_BASE64,
