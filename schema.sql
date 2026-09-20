@@ -712,13 +712,18 @@ CREATE TABLE public.lexicon (
 -- Name: manuscript_witnesses; Type: TABLE; Schema: public; Owner: -
 --
 
+CREATE SEQUENCE public.manuscript_witnesses_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+
 CREATE TABLE public.manuscript_witnesses (
-    id integer,
+    id integer NOT NULL DEFAULT nextval('public.manuscript_witnesses_id_seq'::regclass),
     variant_id integer NOT NULL,
     manuscript text NOT NULL,
     manuscript_date text,
-    reading_support text
+    reading_support text,
+    CONSTRAINT manuscript_witnesses_pkey PRIMARY KEY (id)
 );
+ALTER SEQUENCE public.manuscript_witnesses_id_seq OWNED BY public.manuscript_witnesses.id;
 
 
 --
@@ -878,8 +883,11 @@ ALTER SEQUENCE public.strongs_verse_map_id_seq OWNED BY public.strongs_verse_map
 -- Name: textual_variants; Type: TABLE; Schema: public; Owner: -
 --
 
+CREATE SEQUENCE public.textual_variants_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+
 CREATE TABLE public.textual_variants (
-    id integer,
+    id integer NOT NULL DEFAULT nextval('public.textual_variants_id_seq'::regclass),
     reference text NOT NULL,
     book text NOT NULL,
     chapter integer,
@@ -894,8 +902,11 @@ CREATE TABLE public.textual_variants (
     heiser_content_id integer,
     scholarly_consensus text,
     preferred_for_hlt text,
-    hlt_rationale text
+    hlt_rationale text,
+    CONSTRAINT textual_variants_pkey PRIMARY KEY (id)
 );
+ALTER SEQUENCE public.textual_variants_id_seq OWNED BY public.textual_variants.id;
+
 
 
 --
