@@ -40,9 +40,9 @@ Scrollmapper currently publishes 140 source editions in flat CSV format. Theosis
 python3 scripts/import_translations.py --download \\
   --translations KJV,KJVPCE,NHEBJE,NHEBME
 
-# Historical Hebrew, Greek, and Latin editions
+# Historical Hebrew, Greek, Latin, Syriac, Coptic, Gothic editions
 python3 scripts/import_translations.py --download \\
-  --translations WLC,StatResGNT,Vulgate
+  --translations WLC,StatResGNT,Vulgate,Peshitta,CopSahBible2,Wulfila,HebModern
 
 # Inspect an import without writing to PostgreSQL
 python3 scripts/import_translations.py --download \\
