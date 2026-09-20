@@ -713,11 +713,11 @@ class TheosisDB:
 
     async def get_nt_ot_lxx_quote_hints(self, reference: str) -> list[dict]:
         """Get NT↔OT LXX quotation hints."""
-        if not await self._table_has_rows("lxx_quotations"):
+        if not await self._table_has_rows("nt_ot_lxx_quote_hints"):
             return []
         normalized = self._normalize_reference(reference)
         return await self._fetchall("""
-            SELECT * FROM lxx_quotations
+            SELECT * FROM nt_ot_lxx_quote_hints
             WHERE nt_reference = $1 OR ot_reference = $1
             LIMIT 10
         """, normalized)
