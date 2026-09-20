@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Theosis PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=5m
+Unit=theosis-backup.service
+
+[Install]
+WantedBy=timers.target

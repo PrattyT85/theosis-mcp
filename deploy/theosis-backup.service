@@ -1,0 +1,12 @@
+[Unit]
+Description=Logical PostgreSQL backup for Theosis
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/theosis-mcp/.venv/bin/python /opt/theosis-mcp/scripts/backup_database.py
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+ReadWritePaths=/root/theosis-backups

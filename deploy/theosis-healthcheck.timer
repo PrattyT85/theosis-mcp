@@ -1,0 +1,11 @@
+[Unit]
+Description=Frequent Theosis health check
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=30s
+Unit=theosis-healthcheck.service
+
+[Install]
+WantedBy=timers.target

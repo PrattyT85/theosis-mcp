@@ -1,0 +1,11 @@
+[Unit]
+Description=Theosis MCP and PostgreSQL health check
+After=theosis-mcp.service postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/theosis-mcp/.venv/bin/python /opt/theosis-mcp/scripts/health_check.py
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true

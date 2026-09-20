@@ -41,6 +41,19 @@ export THEOSIS_DATABASE_URL="postgresql://theosis@/theosis?host=/var/run/postgre
 
 The schema file creates tables and indexes, not the large source corpus. Use the import scripts to acquire licensed source editions, and keep a PostgreSQL backup before large imports.
 
+## Operations
+
+The deployment templates include a daily logical backup (keep-last 3) and a health check every 15 minutes. The health check verifies UTF-8 encoding, pgvector, required data, the active systemd service, MCP initialization, and the newest backup archive.
+
+```bash
+sudo systemctl enable --now theosis-backup.timer theosis-healthcheck.timer
+sudo systemctl start theosis-backup.service
+sudo systemctl start theosis-healthcheck.service
+journalctl -u theosis-backup.service -u theosis-healthcheck.service -n 50 --no-pager
+```
+
+Backups are written to `/root/theosis-backups/` and are not committed to Git.
+
 ## Translation imports
 
 Scrollmapper currently publishes 140 source editions in flat CSV format. Theosis imports them in reviewed batches so each edition can retain its language, canon coverage, and source licence metadata. The importer supports English and selected historical-language editions, for example:
