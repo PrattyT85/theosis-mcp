@@ -16,4 +16,7 @@ ALTER TABLE public.manuscript_witnesses ALTER COLUMN id SET DEFAULT nextval('pub
 ALTER TABLE public.manuscript_witnesses ALTER COLUMN id SET NOT NULL;
 ALTER TABLE public.manuscript_witnesses ADD CONSTRAINT manuscript_witnesses_pkey PRIMARY KEY (id);
 
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE
+    public.textual_variants_id_seq, public.manuscript_witnesses_id_seq TO theosis;
+
 COMMIT;
