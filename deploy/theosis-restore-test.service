@@ -1,0 +1,13 @@
+[Unit]
+Description=Disposable Theosis PostgreSQL restore smoke test
+After=postgresql.service theosis-backup.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/theosis-mcp
+ExecStart=/opt/theosis-mcp/.venv/bin/python /opt/theosis-mcp/scripts/restore_smoke_test.py
+TimeoutStartSec=1800
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
