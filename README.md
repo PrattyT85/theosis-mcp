@@ -2,9 +2,9 @@
 
 **Theological Research AI Interface** — PostgreSQL-backed MCP server for deep Bible study.
 
-Connect any MCP-compatible AI (Claude, GPT, local LLMs via Open WebUI) to a unified
-theological database with 140+ Bible translations, Greek/Hebrew lexicons, 340K+ cross-references,
-Church Fathers, Apocrypha, Pseudepigrapha, and AI-powered semantic search.
+Connect any MCP-compatible AI (Claude, GPT, Hermes Desktop, or Open WebUI) to a unified
+theological database with a growing Bible translation catalogue, Greek/Hebrew lexicons,
+340K+ cross-references, Church Fathers, Apocrypha, Pseudepigrapha, and AI-powered semantic search.
 
 ## Features
 
@@ -12,7 +12,7 @@ Church Fathers, Apocrypha, Pseudepigrapha, and AI-powered semantic search.
 - **Original Languages**: Morphologically-tagged Greek NT and Hebrew OT (31K verses)
 - **Cross-References**: 340K+ connections from TSK, Harrison/Romhild, and scholarly sources
 - **Study Notes**: Aquifer Open Study Notes (102K entries) + Tyndale Bible Dictionary
-- **140+ Translations**: Side-by-side comparison with full-text PostgreSQL tsvector search
+- **Translation catalogue**: 140 Scrollmapper source editions; imported batches retain language, coverage, and licence metadata
 - **Extra-Biblical Library**: Church Fathers, Apocrypha, Pseudepigrapha (69+ texts)
 - **Semantic Search**: pgvector embeddings for finding thematically related passages
 - **ANE Context**: Ancient Near East cultural background across 9 historical periods
