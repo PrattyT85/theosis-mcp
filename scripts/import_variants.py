@@ -8,6 +8,7 @@ and manuscript_witnesses tables.
 Usage:
   python3 scripts/import_variants.py
   python3 scripts/import_variants.py --modules SBLGNTApp,VarApp
+  python3 scripts/import_variants.py --truncate   # destructive: clears existing data first
 
 Requires: libsword-utils (mod2imp), asyncpg
 """
@@ -20,8 +21,6 @@ import re
 import subprocess
 import sys
 import time
-
-import asyncpg
 
 DB_URL = os.environ.get(
     "THEOSIS_DATABASE_URL",
@@ -41,6 +40,8 @@ BOOK_TO_OSIS = {
     "Jude": "Jud", "Revelation": "Rev",
 }
 
+KNOWN_SIGLA = frozenset(("WH", "Treg", "NIV", "RP", "NA", "SBL", "THGNT", "NA28", "UBS5"))
+
 MODULES = {
     "SBLGNTApp": {
         "source": "SBLGNT Apparatus",
@@ -52,6 +53,13 @@ MODULES = {
     },
 }
 
+# Documented fixture from the research docs — used for parser validation.
+MATTHEW_1_5_IMP = (
+    "$$$Matthew 1:5\n"
+    "<item>\u0392\u03cc\u03b5\u03c2 \u2026 \u0392\u03cc\u03b5\u03c2 WH NIV ] "
+    "\u0392\u03bf\u1f78\u03c2 \u2026 \u0392\u03bf\u1f78\u03c2 Treg</item>\n"
+)
+
 
 def strip_osis(text):
     """Strip OSIS/HTML markup, keeping Greek text."""
@@ -62,23 +70,55 @@ def strip_osis(text):
     return text
 
 
+def parse_sigla_from_part(text):
+    """Extract known witness sigla from a text fragment.
+
+    Sigla are whitespace-delimited tokens that match KNOWN_SIGLA.
+    Returns a list of siglum strings in order of appearance.
+    """
+    tokens = text.split()
+    return [t for t in tokens if t in KNOWN_SIGLA]
+
+
+def build_witness_payload(variant_id, base_sigla, var_sigla):
+    """Build manuscript_witnesses row dicts for a single textual variant.
+
+    Deduplicates sigla within one run: each siglum appears at most once
+    per reading_support value.
+    """
+    rows = []
+    seen = set()
+    for s in base_sigla:
+        key = (s, "base")
+        if key not in seen:
+            rows.append({"variant_id": variant_id, "manuscript": s, "reading_support": "base"})
+            seen.add(key)
+    for s in var_sigla:
+        key = (s, "variant")
+        if key not in seen:
+            rows.append({"variant_id": variant_id, "manuscript": s, "reading_support": "variant"})
+            seen.add(key)
+    return rows
+
+
 def parse_variant_apparatus(imp_text, module_name):
     """Parse SBLGNT/VarApp IMP format into variant entries.
-    
+
     Format:
         $$$Matthew 1:5
         <item>Βόες … Βόες WH NIV ] Βοὸς … Βοὸς Treg</item>
-    
-    Returns list of (book_osis, chapter, verse, mt_reading, variant_source, variant_reading)
+
+    Returns list of (book_osis, chapter, verse, reference, mt_reading,
+                      variant_source, variant_reading, base_sources, var_sources)
     """
     meta = MODULES[module_name]
     entries = []
-    
+
     current_ref = None
     current_text_parts = []
-    
+
     lines = imp_text.split("\n")
-    
+
     for line in lines:
         marker_match = re.match(r"^\$\$\$(.+)\s+(\d+):(\d+)$", line)
         if marker_match:
@@ -95,17 +135,17 @@ def parse_variant_apparatus(imp_text, module_name):
                         if len(parts) >= 2:
                             base_part = parts[0].strip()
                             var_part = parts[1].strip() if len(parts) > 1 else ""
-                            
+
                             # Extract source sigla from base part
                             base_words = base_part.split()
                             base_text = []
                             sources = []
                             for w in base_words:
-                                if w in ("WH", "Treg", "NIV", "RP", "NA", "SBL", "THGNT", "NA28", "UBS5"):
+                                if w in KNOWN_SIGLA:
                                     sources.append(w)
                                 else:
                                     base_text.append(w)
-                            
+
                             # Parse variant part: "WORD … WORD RP; WORD … WORD Treg"
                             var_parts = re.split(r"[;,]", var_part)
                             for vp in var_parts:
@@ -116,16 +156,16 @@ def parse_variant_apparatus(imp_text, module_name):
                                 vp_text = []
                                 vp_sources = []
                                 for w in vp_words:
-                                    if w in ("WH", "Treg", "NIV", "RP", "NA", "SBL", "THGNT", "NA28", "UBS5"):
+                                    if w in KNOWN_SIGLA:
                                         vp_sources.append(w)
                                     else:
                                         vp_text.append(w)
-                                
+
                                 base_reading = " ".join(base_text) if base_text else base_part
                                 var_reading = " ".join(vp_text) if vp_text else vp.strip()
                                 base_sources = ", ".join(sources) if sources else "WH/NIV"
                                 var_sources = ", ".join(vp_sources) if vp_sources else "RP"
-                                
+
                                 entries.append((
                                     current_ref["osis"],
                                     current_ref["chapter"],
@@ -137,26 +177,75 @@ def parse_variant_apparatus(imp_text, module_name):
                                     base_sources,
                                     var_sources,
                                 ))
-            
+
             book = marker_match.group(1).strip()
             chapter = int(marker_match.group(2))
             verse = int(marker_match.group(3))
             osis = BOOK_TO_OSIS.get(book)
-            
+
             if osis and chapter > 0 and verse > 0:
                 current_ref = {"osis": osis, "chapter": chapter, "verse": verse}
                 current_text_parts = []
             else:
                 current_ref = None
             continue
-        
+
         if current_ref and line.strip() and not line.startswith("$$$"):
             current_text_parts.append(line)
-    
+
+    # Flush the last marker's entries
+    if current_ref and current_text_parts:
+        full_text = " ".join(current_text_parts)
+        items = re.findall(r"<item>(.*?)</item>", full_text, re.DOTALL)
+        for item in items:
+            clean = strip_osis(item)
+            if clean:
+                parts = clean.split("]")
+                if len(parts) >= 2:
+                    base_part = parts[0].strip()
+                    var_part = parts[1].strip() if len(parts) > 1 else ""
+                    base_words = base_part.split()
+                    base_text = []
+                    sources = []
+                    for w in base_words:
+                        if w in KNOWN_SIGLA:
+                            sources.append(w)
+                        else:
+                            base_text.append(w)
+                    var_parts = re.split(r"[;,]", var_part)
+                    for vp in var_parts:
+                        vp = vp.strip()
+                        if not vp:
+                            continue
+                        vp_words = vp.split()
+                        vp_text = []
+                        vp_sources = []
+                        for w in vp_words:
+                            if w in KNOWN_SIGLA:
+                                vp_sources.append(w)
+                            else:
+                                vp_text.append(w)
+                        base_reading = " ".join(base_text) if base_text else base_part
+                        var_reading = " ".join(vp_text) if vp_text else vp.strip()
+                        base_sources = ", ".join(sources) if sources else "WH/NIV"
+                        var_sources = ", ".join(vp_sources) if vp_sources else "RP"
+                        entries.append((
+                            current_ref["osis"],
+                            current_ref["chapter"],
+                            current_ref["verse"],
+                            f"{current_ref['osis']} {current_ref['chapter']}:{current_ref['verse']}",
+                            base_reading if base_reading else "(omitted)",
+                            meta["source"],
+                            var_reading if var_reading else "(reading)",
+                            base_sources,
+                            var_sources,
+                        ))
+
     return entries
 
 
-async def main():
+def build_arg_parser():
+    """Return the ArgumentParser used by the importer (testable)."""
     parser = argparse.ArgumentParser(description="Import NT textual variants")
     parser.add_argument("--modules", default="SBLGNTApp",
                         help="Comma-separated module names")
@@ -164,17 +253,38 @@ async def main():
                         help="Base directory for SWORD modules")
     parser.add_argument("--batch-size", type=int, default=500,
                         help="Batch insert size")
-    args = parser.parse_args()
+    parser.add_argument("--truncate", action="store_true", default=False,
+                        help="DESTRUCTIVE: TRUNCATE textual_variants and "
+                             "manuscript_witnesses before import (default: "
+                             "preserve existing data)")
+    return parser
+
+
+async def main():
+    args = build_arg_parser().parse_args()
+
+    # Lazy import: asyncpg is only needed when actually connecting to a database.
+    import asyncpg
 
     module_names = [m.strip() for m in args.modules.split(",")]
     pg = await asyncpg.connect(DB_URL)
 
     try:
-        # Clear existing variant data
-        existing = await pg.fetchval("SELECT COUNT(*) FROM textual_variants")
-        if existing > 0:
-            print(f"Clearing {existing:,} existing variants...")
-            await pg.execute("TRUNCATE textual_variants, manuscript_witnesses RESTART IDENTITY")
+        # Only truncate when explicitly requested via --truncate
+        if args.truncate:
+            existing = await pg.fetchval("SELECT COUNT(*) FROM textual_variants")
+            if existing > 0:
+                print(f"Destructive mode: clearing {existing:,} existing variants...")
+            await pg.execute(
+                "TRUNCATE textual_variants, manuscript_witnesses RESTART IDENTITY"
+            )
+        else:
+            existing = await pg.fetchval("SELECT COUNT(*) FROM textual_variants")
+            if existing > 0:
+                print(
+                    f"Preserving {existing:,} existing variants "
+                    f"(use --truncate to clear first)"
+                )
 
         for module_name in module_names:
             if module_name not in MODULES:
@@ -213,42 +323,57 @@ async def main():
 
             # Import
             print(f"  Importing...")
-            batch = []
             imported = 0
             start = time.time()
 
             for entry in entries:
-                batch.append(entry)
-                if len(batch) >= args.batch_size:
-                    await pg.executemany(
-                        """INSERT INTO textual_variants 
-                           (book, chapter, verse, reference, mt_reading, variant_source,
-                            variant_reading, variant_significance, scholarly_consensus)
-                           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
-                        batch
-                    )
-                    imported += len(batch)
-                    elapsed = time.time() - start
-                    print(f"    {imported:,}/{len(entries):,} "
-                          f"({imported/len(entries)*100:.0f}%) — {imported/elapsed:.0f}/sec")
-                    batch = []
+                (
+                    book, chapter, verse, reference,
+                    mt_reading, vsource, vreading, base_sigla_str, var_sigla_str,
+                ) = entry
 
-            if batch:
-                await pg.executemany(
-                    """INSERT INTO textual_variants 
+                # Parse sigla strings into lists
+                base_sigla = [s.strip() for s in base_sigla_str.split(",") if s.strip()]
+                var_sigla = [s.strip() for s in var_sigla_str.split(",") if s.strip()]
+
+                # Insert textual variant and get the generated id
+                row_id = await pg.fetchval(
+                    """INSERT INTO textual_variants
                        (book, chapter, verse, reference, mt_reading, variant_source,
                         variant_reading, variant_significance, scholarly_consensus)
-                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
-                    batch
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                       RETURNING id""",
+                    book, chapter, verse, reference, mt_reading,
+                    vsource, vreading, base_sigla_str, var_sigla_str,
                 )
-                imported += len(batch)
+
+                # Insert manuscript witnesses for this variant
+                witness_rows = build_witness_payload(row_id, base_sigla, var_sigla)
+                if witness_rows:
+                    await pg.executemany(
+                        """INSERT INTO manuscript_witnesses
+                           (variant_id, manuscript, reading_support)
+                           VALUES ($1,$2,$3)""",
+                        [list(r.values()) for r in witness_rows],
+                    )
+
+                imported += 1
+                if imported % args.batch_size == 0:
+                    elapsed = time.time() - start
+                    print(
+                        f"    {imported:,}/{len(entries):,} "
+                        f"({imported/len(entries)*100:.0f}%) — "
+                        f"{imported/elapsed:.0f}/sec"
+                    )
 
             elapsed = time.time() - start
             print(f"  Done: {imported:,} in {elapsed:.1f}s")
 
         # Final count
         total = await pg.fetchval("SELECT COUNT(*) FROM textual_variants")
+        witnesses = await pg.fetchval("SELECT COUNT(*) FROM manuscript_witnesses")
         print(f"\nTotal variants: {total:,}")
+        print(f"Total witnesses: {witnesses:,}")
 
     finally:
         await pg.close()
