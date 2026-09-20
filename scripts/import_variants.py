@@ -46,7 +46,7 @@ KNOWN_SIGLA = frozenset((
     # Additional manuscript sigla
     "B", "א", "A", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M", "N",
     "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-    " AssemblyVersion", "Codex", "Lectionary",
+    "Codex", "Lectionary",
 ))
 
 # Regex to match papyrus sigla (e.g., p1, p45, p66, p75)
@@ -224,12 +224,12 @@ def _flush_varapp_readings(ref, readings, entries):
 
     # First reading is the base
     base_greek, base_witnesses = _parse_reading(readings[0])
-    base_sigla_str = base_witnesses if base_witnesses else "(unknown)"
+    base_sigla_str = base_witnesses.replace(" ", ", ") if base_witnesses else "(unknown)"
 
     # Subsequent readings create variant entries
     for reading in readings[1:]:
         var_greek, var_witnesses = _parse_reading(reading)
-        var_sigla_str = var_witnesses if var_witnesses else "(unknown)"
+        var_sigla_str = var_witnesses.replace(" ", ", ") if var_witnesses else "(unknown)"
 
         entries.append((
             ref["osis"],
@@ -482,7 +482,10 @@ async def main():
 
             print(f"  Parsing IMP...")
             with open(imp_file, encoding="utf-8", errors="replace") as f:
-                entries = parse_variant_apparatus(f.read(), module_name)
+                if module_name == "VarApp":
+                    entries = parse_varapp_apparatus(f.read())
+                else:
+                    entries = parse_variant_apparatus(f.read(), module_name)
             print(f"  Parsed {len(entries):,} variant readings")
 
             # Import

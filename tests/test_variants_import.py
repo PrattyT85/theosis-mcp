@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
 from import_variants import (
     build_arg_parser,
+    main,
     parse_sigla_from_part,
     parse_variant_apparatus,
     parse_varapp_apparatus,
@@ -267,6 +268,129 @@ class TestVarAppPreservesUnknownSigla(unittest.TestCase):
         _, _, _, _, _, _, _, base_sigla_str, var_sigla_str = entries[0]
         self.assertIn("p1", base_sigla_str)
         self.assertIn("p1234", var_sigla_str)
+
+
+class TestVarAppDispatchInMain(unittest.TestCase):
+    """Verify main() dispatches to parse_varapp_apparatus for VarApp module."""
+
+    def test_varapp_dispatches_to_varapp_parser(self):
+        """main() with --modules VarApp calls parse_varapp_apparatus."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch, MagicMock
+        import tempfile, os
+
+        imp_content = (
+            "$$$Matthew 1:1\n"
+            "Δαυὶδ] p1 Byz\n"
+            "Δαυεὶδ] B WH\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create module directory (main() checks os.path.isdir first)
+            os.makedirs(os.path.join(tmpdir, "VarApp"), exist_ok=True)
+            # Write the IMP file so main() finds it
+            imp_file = os.path.join(tmpdir, "VarApp.imp")
+            with open(imp_file, "w") as f:
+                f.write(imp_content)
+
+            with patch("import_variants.parse_varapp_apparatus") as mock_varapp, \
+                 patch("import_variants.parse_variant_apparatus") as mock_sblgnt, \
+                 patch("asyncpg.connect", new_callable=AsyncMock) as mock_connect:
+
+                mock_conn = AsyncMock()
+                mock_conn.fetchval = AsyncMock(return_value=0)
+                mock_conn.close = AsyncMock()
+                mock_connect.return_value = mock_conn
+
+                mock_varapp.return_value = []
+
+                # Simulate --modules VarApp --sword-base tmpdir
+                sys.argv = ["import_variants.py", "--modules", "VarApp",
+                            "--sword-base", tmpdir]
+
+                asyncio.run(main())
+
+                # VarApp parser must have been called, SBLGNT must NOT
+                mock_varapp.assert_called_once()
+                mock_sblgnt.assert_not_called()
+
+    def test_sblgnt_dispatches_to_sblgnt_parser(self):
+        """main() with --modules SBLGNTApp calls parse_variant_apparatus."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        import tempfile, os
+
+        imp_content = "$$$Matthew 1:5\n<item>Βόες … Βόες WH NIV ] Βοὸς … Βοὸς Treg</item>\n"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, "SBLGNTApp"), exist_ok=True)
+            imp_file = os.path.join(tmpdir, "SBLGNTApp.imp")
+            with open(imp_file, "w") as f:
+                f.write(imp_content)
+
+            with patch("import_variants.parse_variant_apparatus") as mock_sblgnt, \
+                 patch("import_variants.parse_varapp_apparatus") as mock_varapp, \
+                 patch("asyncpg.connect", new_callable=AsyncMock) as mock_connect:
+
+                mock_conn = AsyncMock()
+                mock_conn.fetchval = AsyncMock(return_value=0)
+                mock_conn.close = AsyncMock()
+                mock_connect.return_value = mock_conn
+
+                mock_sblgnt.return_value = []
+
+                sys.argv = ["import_variants.py", "--modules", "SBLGNTApp",
+                            "--sword-base", tmpdir]
+
+                asyncio.run(main())
+
+                mock_sblgnt.assert_called_once()
+                mock_varapp.assert_not_called()
+
+    def test_varapp_entries_imported_with_correct_source(self):
+        """VarApp entries use 'NT Manuscript Variant Apparatus' as source."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+        import tempfile, os
+
+        imp_content = (
+            "$$$Matthew 1:1\n"
+            "Δαυὶδ] p1 Byz\n"
+            "Δαυεὶδ] B WH\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, "VarApp"), exist_ok=True)
+            imp_file = os.path.join(tmpdir, "VarApp.imp")
+            with open(imp_file, "w") as f:
+                f.write(imp_content)
+
+            with patch("import_variants.parse_varapp_apparatus") as mock_varapp, \
+                 patch("asyncpg.connect", new_callable=AsyncMock) as mock_connect:
+
+                mock_conn = AsyncMock()
+                mock_conn.fetchval = AsyncMock(return_value=0)
+                mock_conn.close = AsyncMock()
+                mock_connect.return_value = mock_conn
+
+                # Return one entry as the parser would
+                mock_varapp.return_value = [
+                    ("Mat", 1, 1, "Mat 1:1", "Δαυὶδ",
+                     "NT Manuscript Variant Apparatus", "Δαυεὶδ",
+                     "p1, Byz", "B, WH")
+                ]
+
+                sys.argv = ["import_variants.py", "--modules", "VarApp",
+                            "--sword-base", tmpdir]
+
+                asyncio.run(main())
+
+                # Verify insert was called (entries imported)
+                self.assertTrue(mock_conn.fetchval.called)
+                # The first call is COUNT(*), second is the INSERT
+                calls = [str(c) for c in mock_conn.fetchval.call_args_list]
+                insert_calls = [c for c in calls if "INSERT" in c]
+                self.assertEqual(len(insert_calls), 1)
 
 
 if __name__ == "__main__":
