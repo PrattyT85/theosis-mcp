@@ -61,3 +61,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.sql", "*.md"]
+
+[tool.pytest.ini_options]
+markers = [
+    "live: marks tests that require a running MCP server (set THEOSIS_MCP_URL to enable)",
+]
