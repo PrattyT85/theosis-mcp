@@ -20,16 +20,26 @@ theological database with a growing Bible translation catalogue, Greek/Hebrew le
 
 ## Quick Start
 
+The repository contains the current schema in `schema.sql`. A fresh installation requires PostgreSQL 16+, the pgvector extension, and a database role named `theosis`.
+
 ```bash
-# Set database URL
-export THEOSIS_DATABASE_URL="postgresql://theosis:***@192.168.1.130:5432/theosis"
+git clone https://github.com/PrattyT85/theosis-mcp.git
+cd theosis-mcp
+uv sync
 
-# Run as stdio MCP server (for Claude Desktop, Cursor, etc.)
-uvx theosis-mcp --transport stdio
+# Apply the schema to an already-created UTF-8 database
+sudo -u postgres psql -d theosis -f schema.sql
 
-# Run as Streamable HTTP server (for Open WebUI)
-uvx theosis-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+export THEOSIS_DATABASE_URL="postgresql://theosis@/theosis?host=/var/run/postgresql"
+
+# Run locally over stdio (for Hermes Desktop, Claude Desktop, Cursor, etc.)
+.venv/bin/theosis-mcp --transport stdio
+
+# Run Streamable HTTP on the required LAN address
+.venv/bin/theosis-mcp --transport streamable-http --host 192.168.1.130 --port 8000
 ```
+
+The schema file creates tables and indexes, not the large source corpus. Use the import scripts to acquire licensed source editions, and keep a PostgreSQL backup before large imports.
 
 ## Translation imports
 
