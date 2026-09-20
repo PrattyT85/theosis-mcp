@@ -1742,6 +1742,12 @@ ALTER TABLE ONLY public.strongs_verse_map
 ALTER TABLE ONLY public.verse_embeddings
     ADD CONSTRAINT verse_embeddings_verse_id_fkey FOREIGN KEY (verse_id) REFERENCES public.verses(id);
 
+-- Search and lookup indexes used by the MCP server.
+CREATE INDEX idx_bible_books_translation_osis ON public.bible_books (translation_id, osis_ref);
+CREATE INDEX idx_bible_verses_book_chapter_verse ON public.bible_verses (book_id, chapter, verse);
+CREATE INDEX idx_bible_verses_fts ON public.bible_verses USING gin (to_tsvector('english', text));
+CREATE INDEX idx_theological_works_fts ON public.theological_works USING gin (to_tsvector('english', text));
+
 -- Fresh installs restore the schema as postgres; grant the runtime/import role access.
 GRANT USAGE ON SCHEMA public TO theosis;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO theosis;
