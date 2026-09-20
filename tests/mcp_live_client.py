@@ -282,3 +282,10 @@ class McpClient:
             params["arguments"] = arguments
         result = self._post_jsonrpc("tools/call", params)
         return result.get("content", result) if isinstance(result, dict) else result
+
+
+def tool_text(result: list[dict]) -> str:
+    """Return the text of the first content block, or empty string."""
+    if isinstance(result, list) and result:
+        return result[0].get("text", "")
+    return ""
