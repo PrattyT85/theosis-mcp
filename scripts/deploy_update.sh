@@ -6,17 +6,19 @@ SERVICE=theosis-mcp.service
 BACKUP_DIR=/root/theosis-backups
 mkdir -p "$BACKUP_DIR"
 
-if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+GIT=(git -c "safe.directory=$ROOT" -C "$ROOT")
+
+if [[ -n "$("${GIT[@]}" status --porcelain)" ]]; then
   echo "Refusing deployment: $ROOT has local changes." >&2
   exit 1
 fi
 
-old_commit=$(git -C "$ROOT" rev-parse HEAD)
+old_commit=$("${GIT[@]}" rev-parse HEAD)
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 cp -a "/etc/systemd/system/$SERVICE" "$BACKUP_DIR/$SERVICE.$stamp"
 
-git -C "$ROOT" fetch origin main
-git -C "$ROOT" reset --hard origin/main
+"${GIT[@]}" fetch origin main
+"${GIT[@]}" reset --hard origin/main
 
 if command -v uv >/dev/null 2>&1; then
   uv sync --frozen --project "$ROOT"
@@ -29,7 +31,7 @@ systemctl daemon-reload
 systemctl restart "$SERVICE"
 
 if systemctl is-active --quiet "$SERVICE" && "$ROOT/.venv/bin/python" "$ROOT/scripts/health_check.py"; then
-  echo "THEOSIS_DEPLOY_OK commit=$(git -C "$ROOT" rev-parse HEAD)"
+  echo "THEOSIS_DEPLOY_OK commit=$("${GIT[@]}" rev-parse HEAD)"
   exit 0
 fi
 
