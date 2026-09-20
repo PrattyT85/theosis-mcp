@@ -43,16 +43,28 @@ def check_mcp() -> None:
             "clientInfo": {"name": "theosis-healthcheck", "version": "1"},
         },
     })
-    connection = http.client.HTTPConnection(HOST, PORT, timeout=10)
-    connection.request(
-        "POST", "/mcp", payload,
-        {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
-    )
-    response = connection.getresponse()
-    body = response.read().decode(errors="replace")
-    connection.close()
-    if response.status != 200 or '"result"' not in body:
-        raise RuntimeError(f"MCP initialize returned HTTP {response.status}")
+    last_error = "unknown error"
+    for attempt in range(5):
+        connection = None
+        try:
+            connection = http.client.HTTPConnection(HOST, PORT, timeout=10)
+            connection.request(
+                "POST", "/mcp", payload,
+                {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"},
+            )
+            response = connection.getresponse()
+            body = response.read().decode(errors="replace")
+            if response.status == 200 and '"result"' in body:
+                return
+            last_error = f"HTTP {response.status}"
+        except OSError as exc:
+            last_error = str(exc)
+        finally:
+            if connection is not None:
+                connection.close()
+        if attempt < 4:
+            time.sleep(2)
+    raise RuntimeError(f"MCP initialize failed after retries: {last_error}")
 
 
 def check_backup() -> str:
