@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "theosis-mcp"
-version = "0.9.0"
+version = "0.9.1"
 description = "Theological Research MCP Server — PostgreSQL-backed Bible study with 140+ translations, lexicons, commentaries, and extra-biblical texts"
 readme = "README.md"
 license = {text = "MIT"}

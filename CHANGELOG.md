@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+## 0.9.1
+
 - Added VarApp parsing and imported 27,668 additional NT textual variants.
 - Added 647,479 manuscript-witness rows while preserving existing variants.
 - Added read-only MCP tools for textual variants and manuscript witnesses.
+- Added deployment and health-check robustness fixes.
 
 ## 0.9.0
 
