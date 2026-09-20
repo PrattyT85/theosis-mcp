@@ -31,6 +31,22 @@ uvx theosis-mcp --transport stdio
 uvx theosis-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 ```
 
+## Translation imports
+
+Scrollmapper currently publishes 140 source editions in flat CSV format. Theosis imports them in reviewed batches so each edition can retain its language, coverage, and source licence metadata. The English importer supports the current flat files, for example:
+
+```bash
+# From a checkout of this repository
+python3 scripts/import_translations.py --download \\
+  --translations KJV,KJVPCE,NHEBJE,NHEBME
+
+# Inspect an import without writing to PostgreSQL
+python3 scripts/import_translations.py --download \\
+  --translations KJV --dry-run
+```
+
+Some source editions are partial (for example, New Testament or Psalms-only) and are reported as partial rather than being described as complete Bibles.
+
 ## Open WebUI Integration
 
 1. In Open WebUI Admin Settings → External Tools, add an MCP connection:
@@ -56,7 +72,7 @@ uvx theosis-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 | `get_dictionary_article` | Full Tyndale Bible Dictionary articles |
 | `get_ane_context` | Ancient Near East cultural background |
 | `get_theology_context` | Systematic theological themes |
-| `list_translations` | Browse 140+ available Bible translations |
+| `list_translations` | Browse imported translations, languages, coverage, and licences |
 | `get_translation_verse` | Get a verse in a specific translation |
 | `compare_translations` | Side-by-side translation comparison |
 | `search_bible_fulltext` | Full-text search across all translations |
