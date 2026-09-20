@@ -730,11 +730,13 @@ class TheosisDB:
         """List all available Bible translations."""
         return await self._fetchall("""
             SELECT bt.id, bt.abbreviation, bt.name, bt.language, bt.year, bt.license, bt.description,
-                   COUNT(bv.id) as verse_count
+                   bt.source_url, bt.coverage_type, bt.book_count, bt.verse_count,
+                   COUNT(bv.id) as live_verse_count
             FROM bible_translations bt
             LEFT JOIN bible_books bb ON bb.translation_id = bt.id
             LEFT JOIN bible_verses bv ON bv.book_id = bb.id
-            GROUP BY bt.id, bt.abbreviation, bt.name, bt.language, bt.year, bt.license, bt.description
+            GROUP BY bt.id, bt.abbreviation, bt.name, bt.language, bt.year, bt.license, bt.description,
+                     bt.source_url, bt.coverage_type, bt.book_count, bt.verse_count
             ORDER BY bt.language, bt.name
         """)
 

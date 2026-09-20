@@ -370,7 +370,10 @@ CREATE TABLE public.bible_translations (
     year integer,
     license text,
     description text,
-    source_url text
+    source_url text,
+    coverage_type text DEFAULT 'unknown'::text NOT NULL,
+    book_count integer DEFAULT 0 NOT NULL,
+    verse_count integer DEFAULT 0 NOT NULL
 );
 
 

@@ -568,8 +568,11 @@ async def handle_list_translations(args: dict[str, Any]) -> list[TextContent]:
     result = "## Available Translations\n\n"
     for t in translations:
         result += f"- **{t['abbreviation']}** — {t['name']} ({t.get('language', '')}, {t.get('year', '')})"
+        result += f" — {t.get('coverage_type', 'unknown')} coverage; {t.get('book_count', 0)} books; {t.get('verse_count', t.get('live_verse_count', 0)):,} verses"
         if t.get("license"):
             result += f" [{t['license']}]"
+        if t.get("source_url"):
+            result += f"; source={t['source_url']}"
         result += "\n"
 
     result += f"\n{len(translations)} translations available.\n"

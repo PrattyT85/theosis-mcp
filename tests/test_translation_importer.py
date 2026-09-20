@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
-from import_translations import TRANSLATIONS, parse_rows  # noqa: E402
+from import_translations import TRANSLATIONS, classify_coverage, parse_rows  # noqa: E402
 
 
 def test_parse_rows_maps_canonical_and_deuterocanonical_books():
@@ -26,6 +26,12 @@ def test_historical_editions_have_language_and_licence_metadata():
     assert TRANSLATIONS["StatResGNT"]["language"] == "grc"
     assert TRANSLATIONS["Vulgate"]["language"] == "la"
     assert TRANSLATIONS["Peshitta"]["license"] == "Public Domain"
+
+
+def test_coverage_classification():
+    assert classify_coverage(66) == "full"
+    assert classify_coverage(78) == "extended"
+    assert classify_coverage(27) == "partial"
 
 
 def test_empty_rows_are_not_imported():

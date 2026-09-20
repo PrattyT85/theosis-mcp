@@ -177,6 +177,15 @@ for key, (name, language, license_name) in HISTORICAL.items():
 ALL_TRANSLATIONS = {key: meta["name"] for key, meta in TRANSLATIONS.items()}
 
 
+def classify_coverage(book_count: int) -> str:
+    """Classify an edition without assuming every source is a full Bible."""
+    if book_count > 66:
+        return "extended"
+    if book_count == 66:
+        return "full"
+    return "partial"
+
+
 async def download_translation(client: httpx.AsyncClient, translation: str) -> str | None:
     response = await client.get(f"{BASE_URL}/{translation}.csv")
     if response.status_code == 404:
@@ -264,18 +273,22 @@ async def import_translation(
     if not rows:
         print(f"  [{abbrev}] No non-empty rows, skipping")
         return 0
+    book_count = len(book_specs)
+    verse_count = len(rows)
+    coverage_type = classify_coverage(book_count)
     description = (
-        f"Scrollmapper import; {len(book_specs)} source books; "
-        f"{len(rows):,} non-empty verses"
+        f"Scrollmapper import; {book_count} source books; "
+        f"{verse_count:,} non-empty verses; coverage={coverage_type}"
     )
 
     async with conn.transaction():
         trans_id = await conn.fetchval(
             """INSERT INTO bible_translations
-               (abbreviation, name, language, license, description, source_url)
-               VALUES ($1, $2, $3, $4, $5, $6) RETURNING id""",
+               (abbreviation, name, language, license, description, source_url,
+                coverage_type, book_count, verse_count)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id""",
             abbrev, metadata["name"], metadata["language"], metadata["license"],
-            description, metadata["source_url"],
+            description, metadata["source_url"], coverage_type, book_count, verse_count,
         )
 
         book_ids = {}
