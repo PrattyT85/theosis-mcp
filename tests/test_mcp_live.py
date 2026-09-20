@@ -182,6 +182,17 @@ class TestConnectionReset:
 
 
 # ---------------------------------------------------------------------------
+# Helper: extract first content block text from an MCP tool result
+# ---------------------------------------------------------------------------
+
+def _tool_text(result: list[dict]) -> str:
+    """Return the text of the first content block, or empty string."""
+    if isinstance(result, list) and result:
+        return result[0].get("text", "")
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # Live integration tests (skipped without THEOSIS_MCP_URL)
 # ---------------------------------------------------------------------------
 
@@ -205,6 +216,12 @@ class TestToolsList:
         names = {tool["name"] for tool in result}
         assert "lookup_verse" in names, "lookup_verse tool not found"
         assert "list_theological_works" in names, "list_theological_works tool not found"
+
+    def test_tool_count_at_least_28(self) -> None:
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_list()
+        assert len(result) >= 28, f"Expected >= 28 tools, got {len(result)}"
 
 
 @pytest.mark.live
@@ -232,12 +249,15 @@ class TestToolsCall:
 class TestJsonRpcError:
     """Verify that an invalid tool call produces a JSON-RPC error."""
 
-    def test_invalid_tool_raises_mcp_error(self) -> None:
+    def test_invalid_tool_returns_error_content(self) -> None:
+        """Server returns error text in content, not a JSON-RPC error."""
         with McpClient(THEOSIS_MCP_URL) as client:
             client.initialize()
-            with pytest.raises(McpError) as exc_info:
-                client.tools_call("nonexistent_tool_xyz")
-            assert exc_info.value.code != 0
+            result = client.tools_call("nonexistent_tool_xyz")
+        text = _tool_text(result)
+        assert "Unknown tool" in text or "unknown" in text.lower(), (
+            f"Expected error message about unknown tool, got: {text[:200]}"
+        )
 
 
 @pytest.mark.live
@@ -245,9 +265,370 @@ class TestJsonRpcError:
 class TestSSEParserLive:
     """Verify the SSE parser handles real server responses correctly."""
 
-    def test_initialize_returns_session_id(self) -> None:
+    def test_initialize_returns_capabilities(self) -> None:
         with McpClient(THEOSIS_MCP_URL) as client:
             result = client.initialize()
-            assert client._session_id is not None, "Session ID should be captured"
             assert isinstance(result, dict), "Initialize result should be a dict"
             assert "protocolVersion" in result or "capabilities" in result
+            # Session ID may or may not be sent depending on server config
+
+
+# ---------------------------------------------------------------------------
+# Live: Bible lookup via reference string
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestLookupVerse:
+    """Bible verse lookup with the reference-style API."""
+
+    def test_john_3_16_reference_string(self) -> None:
+        """lookup_verse accepts a single reference string."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("lookup_verse", {"reference": "John 3:16"})
+        text = _tool_text(result)
+        assert len(text) > 0, "Content text should not be empty"
+        # Stable: the verse heading should appear
+        assert "John 3:16" in text
+        # Stable: content should mention "God" (present in every translation)
+        assert "God" in text
+
+    def test_genesis_1_1_interlinear(self) -> None:
+        """Genesis 1:1 lookup_verse returns interlinear English breakdown."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("lookup_verse", {"reference": "Genesis 1:1"})
+        text = _tool_text(result)
+        assert "Genesis 1:1" in text
+        # lookup_verse returns interlinear format with word-by-word markers
+        assert "beginning" in text.lower() or "created" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Live: Greek/Hebrew word study
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestWordStudy:
+    """Greek/Hebrew word study via Strong's number."""
+
+    def test_greek_strongs_g26(self) -> None:
+        """G26 is agapē (love) — a well-known Greek lexicon entry."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("word_study", {"strongs": "G26"})
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Stable identifiers: Strong's number and transliteration
+        assert "G0026" in text or "G26" in text
+        # The word should be agapē / love
+        assert "agap" in text.lower() or "love" in text.lower()
+
+    def test_hebrew_strongs_h430(self) -> None:
+        """H430 is Elohim — a well-known Hebrew lexicon entry."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("word_study", {"strongs": "H430"})
+        text = _tool_text(result)
+        assert len(text) > 0
+        assert "H0430" in text or "H430" in text
+        # Elohim should appear in some form
+        assert "elo" in text.lower() or "God" in text
+
+
+# ---------------------------------------------------------------------------
+# Live: Translation comparison
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestCompareTranslations:
+    """Compare verses across different translations."""
+
+    def test_kjv_vulgate_comparison(self) -> None:
+        """KJV and Vulgate for John 3:16 should both appear."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("compare_translations", {
+                "reference": "John 3:16",
+                "translations": ["KJV", "Vulgate"],
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Stable: both translation names should appear as section headers
+        assert "KJV" in text or "King James" in text
+        assert "Vulgate" in text
+        # John 3:16 KJV contains "only begotten Son"
+        assert "only begotten" in text or "unigenitum" in text
+
+    def test_wlc_genesis(self) -> None:
+        """WLC (Westminster Leningrad Codex) for Genesis 1:1."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("get_translation_verse", {
+                "reference": "Genesis 1:1",
+                "translation": "WLC",
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # WLC should return Hebrew text
+        assert any("\u0590" <= ch <= "\u05FF" for ch in text), (
+            "Expected Hebrew characters in WLC text"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live: Historical-language lookups
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestHistoricalLanguage:
+    """Historical-language edition lookups."""
+
+    def test_wlc_genesis_1_1(self) -> None:
+        """WLC Genesis 1:1 should return pure Hebrew."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("get_translation_verse", {
+                "reference": "Genesis 1:1",
+                "translation": "WLC",
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the WLC name or Hebrew text
+        assert "WLC" in text or "Westminster" in text or "Leningrad" in text
+
+    def test_vulgate_tobit_1_1(self) -> None:
+        """Vulgate Tobit 1:1 should return Latin text."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("compare_translations", {
+                "reference": "Tobit 1:1",
+                "translations": ["Vulgate"],
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Vulgate header or Latin text
+        assert "Vulgate" in text
+        # Latin markers: common Latin words
+        assert any(w in text.lower() for w in ["tobias", "nepthalim", "galilae", "vulgate"])
+
+
+# ---------------------------------------------------------------------------
+# Live: Full-text search
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestFullTextSearch:
+    """Bible full-text search."""
+
+    def test_living_water_search(self) -> None:
+        """'living water' should return results."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("search_bible_fulltext", {"query": "living water"})
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the search query in a heading
+        assert "living water" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Live: Semantic search (similar passages)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestSemanticSearch:
+    """Semantic similarity search via pgvector embeddings."""
+
+    def test_similar_to_john_3_16(self) -> None:
+        """Similar passages to John 3:16 should include a similarity score."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("find_similar_passages", {
+                "reference": "John 3:16",
+                "limit": 3,
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain a percentage similarity score
+        assert "%" in text
+        # Should mention the original reference
+        assert "John 3:16" in text
+
+
+# ---------------------------------------------------------------------------
+# Live: Cross-references
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestCrossReferences:
+    """Cross-reference lookup."""
+
+    def test_john_3_16_cross_references(self) -> None:
+        """John 3:16 cross-references should include well-known connections."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("get_cross_references", {
+                "reference": "John 3:16",
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the reference heading
+        assert "John 3:16" in text
+        # Should contain vote counts (stable numeric data)
+        assert "votes" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Live: Commentary
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestCommentary:
+    """Commentary lookup for a well-known verse."""
+
+    def test_john_3_16_commentary(self) -> None:
+        """John 3:16 should have commentary from church fathers."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("get_commentary", {
+                "reference": "John 3:16",
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain a commentary heading
+        assert "Commentaries" in text or "commentary" in text.lower()
+        # Should mention at least one known church father or theologian
+        known_authors = [
+            "Augustine", "Chrysostom", "Tertullian", "Origen",
+            "John Calvin", "Matthew Henry", "Thomas Aquinas",
+        ]
+        assert any(author in text for author in known_authors), (
+            f"Expected at least one of {known_authors} in commentary text"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live: Extra-biblical search
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestExtraBiblicalSearch:
+    """Search extra-biblical texts."""
+
+    def test_enoch_search(self) -> None:
+        """Search for 'Enoch' in extra-biblical texts."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("search_extra_biblical", {"query": "Enoch"})
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the search heading
+        assert "Enoch" in text
+        # Should reference at least one known category
+        known_categories = ["pseudepigrapha", "church_fathers", "apocrypha"]
+        assert any(cat in text.lower() for cat in known_categories), (
+            f"Expected one of {known_categories} in extra-biblical results"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live: Systematic theology — list, search, section
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestSystematicTheology:
+    """Systematic theology tools: list, search, and section retrieval."""
+
+    def test_list_theological_works(self) -> None:
+        """list_theological_works should return known authors."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("list_theological_works", {})
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain known theologians
+        known = ["Strong", "Finney", "Hodge"]
+        assert any(name in text for name in known), (
+            f"Expected at least one of {known} in theological works list"
+        )
+        # Should contain source URLs (provenance)
+        assert "http" in text
+
+    def test_search_theological_works(self) -> None:
+        """search_theological_works for 'justification' should return results."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("search_theological_works", {
+                "query": "justification",
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the search term in heading or content
+        assert "justification" in text.lower()
+
+    def test_get_theological_section(self) -> None:
+        """get_theological_section for Hodge's Systematic Theology."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("get_theological_section", {
+                "work_title": "Systematic Theology",
+                "author": "Hodge",
+            })
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the work title and author
+        assert "Systematic Theology" in text
+        assert "Hodge" in text
+        # Should contain provenance (source URL)
+        assert "http" in text
+
+
+# ---------------------------------------------------------------------------
+# Live: list_translations provenance fields
+# ---------------------------------------------------------------------------
+
+@pytest.mark.live
+@pytestmark_live
+class TestListTranslationsProvenance:
+    """Verify list_translations returns provenance and licence information."""
+
+    def test_translations_contain_provenance(self) -> None:
+        """Each translation entry should include licence and source."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("list_translations", {})
+        text = _tool_text(result)
+        assert len(text) > 0
+        # Should contain the heading
+        assert "Translations" in text or "translations" in text.lower()
+        # Should mention licence markers (brackets around licence names)
+        assert "[" in text, "Expected licence markers in brackets"
+        # Should contain source URLs
+        assert "http" in text, "Expected source URLs in translation list"
+        # Should mention at least one known abbreviation
+        known_abbrevs = ["KJV", "ESV", "NASB", "WLC", "Vulgate", "AKJV"]
+        assert any(abbr in text for abbr in known_abbrevs), (
+            f"Expected at least one of {known_abbrevs}"
+        )
+
+    def test_translations_contain_verse_counts(self) -> None:
+        """Translation entries should include verse/book counts."""
+        with McpClient(THEOSIS_MCP_URL) as client:
+            client.initialize()
+            result = client.tools_call("list_translations", {})
+        text = _tool_text(result)
+        # Should contain coverage indicators
+        assert "verses" in text.lower() or "books" in text.lower(), (
+            "Expected verse or book count indicators"
+        )
