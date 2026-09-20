@@ -36,6 +36,6 @@ if systemctl is-active --quiet "$SERVICE" && "$ROOT/.venv/bin/python" "$ROOT/scr
 fi
 
 echo "Deployment health check failed; rolling back to $old_commit" >&2
-git -C "$ROOT" reset --hard "$old_commit"
+"${GIT[@]}" reset --hard "$old_commit"
 systemctl restart "$SERVICE" || true
 exit 1

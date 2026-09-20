@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import socket
 import subprocess
 import sys
 import time
@@ -95,8 +94,6 @@ def main() -> int:
         code, output = command("systemctl", "is-active", "--quiet", "theosis-mcp.service")
         if code:
             raise RuntimeError("theosis-mcp.service is not active")
-        with socket.create_connection((HOST, PORT), timeout=10):
-            pass
         check_mcp()
     except Exception as exc:
         failures.append(str(exc))
