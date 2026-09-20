@@ -40,7 +40,21 @@ BOOK_TO_OSIS = {
     "Jude": "Jud", "Revelation": "Rev",
 }
 
-KNOWN_SIGLA = frozenset(("WH", "Treg", "NIV", "RP", "NA", "SBL", "THGNT", "NA28", "UBS5"))
+KNOWN_SIGLA = frozenset((
+    # Edition sigla
+    "WH", "Treg", "NIV", "RP", "NA", "SBL", "THGNT", "NA28", "UBS5",
+    # Additional manuscript sigla
+    "B", "א", "A", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M", "N",
+    "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    " AssemblyVersion", "Codex", "Lectionary",
+))
+
+# Regex to match papyrus sigla (e.g., p1, p45, p66, p75)
+_PAPYRUS_RE = re.compile(r"^p\d+$")
+# Regex to match uncials (single uppercase letter or Unicode aleph etc.)
+_UNCIAL_RE = re.compile(r"^[Α-Ω]$|^א$|^[\u0370-\u03FF]$")  # Greek + Hebrew letters
+# Byzantine families
+_BYZANTINE_RE = re.compile(r"^f\d+$|^Byz$|^Lect$|^Maj$")
 
 MODULES = {
     "SBLGNTApp": {
@@ -60,6 +74,53 @@ MATTHEW_1_5_IMP = (
     "\u0392\u03bf\u1f78\u03c2 \u2026 \u0392\u03bf\u1f78\u03c2 Treg</item>\n"
 )
 
+# VarApp Matthew 1:1 fixture — stable fixture for parser validation.
+# Format: each reading is "Greek text] witness_list"
+# First reading = base, subsequent readings = variants.
+MATTHEW_1_1_VARAPP = (
+    "$$$Matthew 1:1\n"
+    "Δαυὶδ] p1 Byz\n"
+    "Δαυεὶδ] B WH\n"
+    "Δαβὶδ] ς\n"
+)
+
+# Extended KNOWN_SIGLA set for VarApp manuscript support
+VARAPP_KNOWN_SIGLA = KNOWN_SIGLA | frozenset((
+    "p1", "p45", "p66", "p75", "p127",
+    "א", "B", "A", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M", "N",
+    "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "Byz", "f1", "f13", "Lect", "Maj",
+    "cop", "syr", "vg", "it",
+    "WH", "NA", "UBS", "ς",
+    "RP", "NIV", "SBL", "THGNT", "Treg",
+))
+
+
+def classify_witness(siglum):
+    """Classify a witness siglum into its type category.
+
+    Returns one of: 'papyrus', 'uncial', 'byzantine', 'edition',
+    'version', or 'unknown'.  Unknown tokens are preserved rather than
+    discarded.
+    """
+    if _PAPYRUS_RE.match(siglum):
+        return "papyrus"
+    # Check editions before uncial — ς (final sigma) is a Greek letter but is an edition siglum
+    if siglum in ("WH", "Treg", "NIV", "RP", "NA", "SBL", "THGNT",
+                  "NA28", "UBS5", "UBS", "ς"):
+        return "edition"
+    if siglum in ("B", "א", "A", "C", "D", "E", "F", "G", "H", "I", "K",
+                   "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V",
+                   "W", "X", "Y", "Z"):
+        return "uncial"
+    if _UNCIAL_RE.match(siglum):
+        return "uncial"
+    if _BYZANTINE_RE.match(siglum):
+        return "byzantine"
+    if siglum in ("cop", "syr", "vg", "it", "Arm", "Eth", "Goth"):
+        return "version"
+    return "unknown"
+
 
 def strip_osis(text):
     """Strip OSIS/HTML markup, keeping Greek text."""
@@ -78,6 +139,109 @@ def parse_sigla_from_part(text):
     """
     tokens = text.split()
     return [t for t in tokens if t in KNOWN_SIGLA]
+
+
+def _parse_reading(line):
+    """Parse a single VarApp reading line into (greek_text, witnesses_str).
+
+    Format: "Greek text] witness1 witness2 ..."
+    The ']' delimiter separates the Greek text from witness sigla.
+    Unknown tokens are preserved as-is rather than discarded.
+    """
+    line = line.strip()
+    if "]" not in line:
+        return line, ""
+    # Split on first ']' only — readings may contain multiple ']' in theory
+    parts = line.split("]", 1)
+    greek_text = parts[0].strip()
+    witnesses = parts[1].strip() if len(parts) > 1 else ""
+    return greek_text, witnesses
+
+
+def parse_varapp_apparatus(imp_text):
+    """Parse VarApp IMP format into variant entries.
+
+    VarApp format:
+        $$$Matthew 1:1
+        Δαυὶδ] p1 Byz
+        Δαυεὶδ] B WH
+
+    Each reading line has the format: "Greek text] witness_list"
+    The first reading for a verse is the base reading; subsequent readings
+    are variants. Multiple readings are separated by <lb/> or line breaks.
+
+    Returns list of (book_osis, chapter, verse, reference, mt_reading,
+                      variant_source, variant_reading, base_sources, var_sources)
+    """
+    entries = []
+    current_ref = None
+    current_readings = []
+
+    lines = imp_text.split("\n")
+    for line in lines:
+        # Split on <lb/> first — this is a reading separator, not just whitespace
+        sublines = re.split(r"<lb\s*/?>", line)
+
+        for subline in sublines:
+            # Check for verse marker
+            marker_match = re.match(r"^\$\$\$(.+)\s+(\d+):(\d+)$", subline.strip())
+            if marker_match:
+                # Flush previous marker's readings
+                if current_ref and current_readings:
+                    _flush_varapp_readings(current_ref, current_readings, entries)
+
+                book_name = marker_match.group(1).strip()
+                chapter = int(marker_match.group(2))
+                verse = int(marker_match.group(3))
+                osis = BOOK_TO_OSIS.get(book_name)
+
+                if osis and chapter > 0 and verse > 0:
+                    current_ref = {"osis": osis, "chapter": chapter, "verse": verse}
+                    current_readings = []
+                else:
+                    current_ref = None
+                continue
+
+            # Accumulate reading lines
+            if current_ref and subline.strip():
+                current_readings.append(subline.strip())
+
+    # Flush the last marker's readings
+    if current_ref and current_readings:
+        _flush_varapp_readings(current_ref, current_readings, entries)
+
+    return entries
+
+
+def _flush_varapp_readings(ref, readings, entries):
+    """Flush accumulated VarApp readings into entries.
+
+    First reading = base; subsequent readings are variant pairs
+    (base, variant) for each variant reading found.
+    """
+    if len(readings) < 2:
+        return
+
+    # First reading is the base
+    base_greek, base_witnesses = _parse_reading(readings[0])
+    base_sigla_str = base_witnesses if base_witnesses else "(unknown)"
+
+    # Subsequent readings create variant entries
+    for reading in readings[1:]:
+        var_greek, var_witnesses = _parse_reading(reading)
+        var_sigla_str = var_witnesses if var_witnesses else "(unknown)"
+
+        entries.append((
+            ref["osis"],
+            ref["chapter"],
+            ref["verse"],
+            f"{ref['osis']} {ref['chapter']}:{ref['verse']}",
+            base_greek if base_greek else "(base)",
+            MODULES["VarApp"]["source"],
+            var_greek if var_greek else "(variant)",
+            base_sigla_str,
+            var_sigla_str,
+        ))
 
 
 def build_witness_payload(variant_id, base_sigla, var_sigla):
