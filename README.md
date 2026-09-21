@@ -69,6 +69,14 @@ python3 scripts/import_translations.py --download \\
 python3 scripts/import_translations.py --download \\
   --translations WLC,StatResGNT,Vulgate,Peshitta,CopSahBible2,Wulfila,HebModern
 
+# Prepare and import local public-domain historical sources
+uv run --extra source scripts/prepare_historical_sources.py \\
+  --brenton-zip /path/to/eng-Brenton_usfm.zip \\
+  --murdock-dir /path/to/unpacked/Murdock \\
+  --output-dir /path/to/prepared
+python3 scripts/import_translations.py --data-dir /path/to/prepared \\
+  --translations Brenton,Murdock
+
 # Inspect an import without writing to PostgreSQL
 python3 scripts/import_translations.py --download \\
   --translations WLC --dry-run
@@ -112,6 +120,13 @@ The importer preserves non-canonical books when the source edition includes them
 | `list_theological_works` | List imported systematic theology works |
 | `search_theological_works` | Search systematic theology by doctrine or phrase |
 | `get_theological_section` | Retrieve a full systematic theology section |
+
+## Research Notebook
+
+The Theosis Research Notebook is a Hermes skill for capturing theological observations and research syntheses as portable Obsidian Markdown notes, linked to Scripture and Theosis sources. It follows an observe → capture → restate → expand → link → review workflow and requires explicit user approval before writing to the vault.
+
+- [Documentation](docs/research-notebook.md) — installation, usage, schema, and workflow
+- [Example note](examples/research-notebook/2-peter-2-13-communal-meals.md) — sample research note with all six sections
 
 ## Credits
 

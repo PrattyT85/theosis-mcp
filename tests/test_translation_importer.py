@@ -1,9 +1,9 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 
-from import_translations import TRANSLATIONS, classify_coverage, parse_rows  # noqa: E402
+from import_translations import TRANSLATIONS, classify_coverage, parse_rows
 
 
 def test_parse_rows_maps_canonical_and_deuterocanonical_books():
@@ -26,6 +26,20 @@ def test_historical_editions_have_language_and_licence_metadata():
     assert TRANSLATIONS["StatResGNT"]["language"] == "grc"
     assert TRANSLATIONS["Vulgate"]["language"] == "la"
     assert TRANSLATIONS["Peshitta"]["license"] == "Public Domain"
+    assert TRANSLATIONS["Brenton"]["license"] == "Public Domain"
+    assert TRANSLATIONS["Murdock"]["local_only"] is True
+
+
+def test_english_lxx_extra_books_use_stable_identifiers():
+    content = """Book,Chapter,Verse,Text
+Susanna,1,1,The prayer of Susanna
+Bel and the Dragon,1,1,The account of Bel
+1 Maccabees,1,1,The first verse
+"""
+    rows, books = parse_rows(content)
+    assert len(rows) == 3
+    assert set(books) == {"Sus", "Bel", "1Ma"}
+    assert all(spec[2] == "APO" for spec in books.values())
 
 
 def test_coverage_classification():

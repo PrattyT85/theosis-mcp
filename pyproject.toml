@@ -47,6 +47,9 @@ sse = [
     "uvicorn>=0.24.0",
     "sse-starlette>=1.6.0",
 ]
+source = [
+    "pysword>=0.2.8",
+]
 
 [project.scripts]
 theosis-mcp = "theosis_mcp.server:main"
