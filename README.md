@@ -69,6 +69,14 @@ python3 scripts/import_translations.py --download \\
 python3 scripts/import_translations.py --download \\
   --translations WLC,StatResGNT,Vulgate,Peshitta,CopSahBible2,Wulfila,HebModern
 
+# Prepare and import local public-domain historical sources
+uv run --extra source scripts/prepare_historical_sources.py \\
+  --brenton-zip /path/to/eng-Brenton_usfm.zip \\
+  --murdock-dir /path/to/unpacked/Murdock \\
+  --output-dir /path/to/prepared
+python3 scripts/import_translations.py --data-dir /path/to/prepared \\
+  --translations Brenton,Murdock
+
 # Inspect an import without writing to PostgreSQL
 python3 scripts/import_translations.py --download \\
   --translations WLC --dry-run

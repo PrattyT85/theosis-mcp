@@ -119,6 +119,14 @@ EXTRA_BOOKS = {
     "prayerofmanasseh": ("Prayer of Manasseh", "PrMan", "APO"),
     "laodiceans": ("Laodiceans", "EpLao", "APO"),
     "additionalsalm": ("Additional Psalm", "Psa151", "APO"),
+    "susanna": ("Susanna", "Sus", "APO"),
+    "belandthedragon": ("Bel and the Dragon", "Bel", "APO"),
+    "1maccabees": ("1 Maccabees", "1Ma", "APO"),
+    "2maccabees": ("2 Maccabees", "2Ma", "APO"),
+    "3maccabees": ("3 Maccabees", "3Ma", "APO"),
+    "4maccabees": ("4 Maccabees", "4Ma", "APO"),
+    "1esdras": ("1 Esdras", "1Esd", "APO"),
+    "2esdras": ("2 Esdras", "2Esd", "APO"),
 }
 
 # English editions in Scrollmapper's 140-edition catalogue.
@@ -157,6 +165,30 @@ HISTORICAL = {
     "HebModern": ("Modern Hebrew Bible", "he", "Licence not specified"),
 }
 
+# Editions prepared from their authoritative source archives by
+# prepare_historical_sources.py.  They are intentionally local-only: the
+# importer must not silently fetch a different or stale file when --download
+# is used.
+LOCAL_HISTORICAL = {
+    "Brenton": {
+        "name": "Brenton English Septuagint",
+        "language": "en",
+        "license": "Public Domain",
+        "source_url": "https://ebible.org/find/show.php?id=eng-Brenton",
+        "coverage_type": "extended",
+        "source_label": "eBible.org Brenton USFM",
+        "local_only": True,
+    },
+    "Murdock": {
+        "name": "James Murdock Translation of the Syriac Peshitta",
+        "language": "en",
+        "license": "Public Domain",
+        "source_url": "https://www.crosswire.org/sword/modules/ModInfo.jsp?modName=Murdock",
+        "source_label": "CrossWire SWORD Murdock module",
+        "local_only": True,
+    },
+}
+
 TRANSLATIONS: dict[str, dict[str, Any]] = {
     key: {
         "name": value,
@@ -173,6 +205,7 @@ for key, (name, language, license_name) in HISTORICAL.items():
         "license": license_name,
         "source_url": f"{BASE_URL}/{key}.csv",
     }
+TRANSLATIONS.update(LOCAL_HISTORICAL)
 
 ALL_TRANSLATIONS = {key: meta["name"] for key, meta in TRANSLATIONS.items()}
 
@@ -187,6 +220,8 @@ def classify_coverage(book_count: int) -> str:
 
 
 async def download_translation(client: httpx.AsyncClient, translation: str) -> str | None:
+    if TRANSLATIONS.get(translation, {}).get("local_only"):
+        return None
     response = await client.get(f"{BASE_URL}/{translation}.csv")
     if response.status_code == 404:
         return None
@@ -205,10 +240,9 @@ def resolve_book(source_book: str, discovered_extra: dict[str, tuple[str, str, s
     key = canonical(source_book)
     if key in CANONICAL_BOOKS:
         return CANONICAL_BOOKS[key]
-    if key in EXTRA_BOOKS:
-        name, osis, testament = EXTRA_BOOKS[key]
-    else:
-        name, osis, testament = source_book, f"Src_{key}", "OTHER"
+    name, osis, testament = EXTRA_BOOKS.get(
+        key, (source_book, f"Src_{key}", "OTHER")
+    )
     if osis not in discovered_extra:
         discovered_extra[osis] = (name, osis, testament, 1000 + len(discovered_extra))
     return discovered_extra[osis]
@@ -275,9 +309,10 @@ async def import_translation(
         return 0
     book_count = len(book_specs)
     verse_count = len(rows)
-    coverage_type = classify_coverage(book_count)
+    coverage_type = metadata.get("coverage_type", classify_coverage(book_count))
+    source_label = metadata.get("source_label", "Scrollmapper")
     description = (
-        f"Scrollmapper import; {book_count} source books; "
+        f"{source_label} import; {book_count} source books; "
         f"{verse_count:,} non-empty verses; coverage={coverage_type}"
     )
 
