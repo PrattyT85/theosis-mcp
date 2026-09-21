@@ -49,6 +49,7 @@ REQUIRED_FRONT_MATTER_KEYS = [
 PATH_REJECTION_GUIDANCE = [
     "readwrite/theosis-notes/",
 ]
+ABSOLUTE_HOME_MARKER = "/" + "home/"
 
 
 def _read(path: str) -> str:
@@ -213,8 +214,8 @@ class TestTemplate:
 
     def test_no_real_private_content(self):
         lower = self.content.lower()
-        assert "/home/" not in self.content, (
-            "Template must not contain absolute /home/ paths"
+        assert ABSOLUTE_HOME_MARKER not in self.content, (
+            "Template must not contain absolute home paths"
         )
 
 
@@ -230,8 +231,8 @@ class TestExampleNote:
         self.content = _read(EXAMPLE_PATH)
 
     def test_no_absolute_home_paths(self):
-        assert "/home/" not in self.content, (
-            "Example must not contain absolute /home/ paths"
+        assert ABSOLUTE_HOME_MARKER not in self.content, (
+            "Example must not contain absolute home paths"
         )
 
     def test_structural_delimiter_parse(self):

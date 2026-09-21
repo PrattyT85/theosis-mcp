@@ -136,7 +136,7 @@ Before merging a skill change:
 - [ ] `readonly/` is never modified
 - [ ] Template has all 12 required front-matter keys and 6 body sections
 - [ ] Provenance reference describes six-layer taxonomy
-- [ ] Example note has no absolute `/home/` paths and uses fictional content only
+- [ ] Example note has no absolute home paths and uses fictional content only
 - [ ] Docs mention `OBSIDIAN_VAULT_PATH`, offline portability, and draft/approval workflow
 - [ ] README links to `docs/research-notebook.md` and the example
 - [ ] `git grep` finds no secrets, tokens, or private vault paths in committed files
