@@ -46,6 +46,49 @@ Content from `private/` must never appear in commits, PRs, examples, or document
 
 This two-turn protocol ensures the user retains full control over their theological notes.
 
+## Provenance Capture
+
+Every note must record provenance metadata. The format ensures reproducibility and auditability:
+
+- **`source_refs`** — preserve the actual tool name and arguments (e.g. `theosis_mcp.get_study_notes(reference='2 Peter 2:13')`), not a generic label.
+- **`source_licences`** — record the source/edition and licence for each source; mark unknown licences as `unknown`.
+- **`retrieved_at`** — ISO-8601 datetime; must correspond positionally to `source_refs` and `source_licences` when multiple sources are used.
+
+Raw returned source text belongs in the appropriate labelled section (`## Biblical text`, `## Original-language observation`, `## External source`), not silently in `## User synthesis`.
+
+See `references/provenance.md` for the six-layer taxonomy and detailed rules.
+
+## Opt-in Scripture Linking
+
+Automatic Scripture detection/normalization and automatic wiki-link insertion are **OFF by default** to avoid noisy backlinks that pollute the vault's link graph.
+
+When the user requests Scripture linking:
+
+1. Hermes detects Scripture references and shows them along with candidate related notes.
+2. The user's exact Scripture reference text is preserved unchanged.
+3. Wiki-links are inserted only after explicit approval of the exact links.
+4. Manual search and backlink discovery (`search_files` for `[[reference]]`) remain available at any time.
+
+## Safe Edits to Existing Notes
+
+When editing an existing note, follow this workflow to prevent data loss:
+
+1. **Read current** — read the existing file and confirm its contents.
+2. **Produce a unified diff or preview** — show the exact changes to the user.
+3. **Separate explicit approval** — wait for the user to approve the exact changes.
+4. **Re-read immediately before patch** — re-read the file to detect any changes since the diff was generated.
+5. **Patch only the approved note** under `readwrite/theosis-notes/`.
+6. **Read back and verify** — confirm the edit landed correctly.
+
+Abort rather than overwrite on a changed file, collision, or conflict. Never force overwrite or force-push. Preserve both sides of a conflict and stop for user resolution.
+
+## Performance Guidance
+
+Keep file scanning while the vault is small — `search_files` over `.md` files in `readwrite/theosis-notes/` is fast for hundreds of notes. When searching becomes noticeably slow:
+
+1. Measure note count and search latency before proposing a local index.
+2. Only suggest a local index or SQLite-backed search after measured need.
+
 ## Note Schema
 
 Notes use UTF-8 Markdown with YAML front matter. Required fields:
@@ -56,7 +99,7 @@ Notes use UTF-8 Markdown with YAML front matter. Required fields:
 - `status` — `draft`, `reviewed`, or `published`
 - `scripture_refs` — list of Scripture references
 - `tags` — case-insensitive tags
-- `source_refs` — machine-readable source references
+- `source_refs` — machine-readable tool calls with arguments
 - `provenance` — six-layer provenance label
 - `created` / `updated` — ISO dates
 
@@ -88,9 +131,9 @@ The notebook works fully offline. Theosis MCP tools provide enrichment (lexicon 
 
 ## Deferred Features (not in this MVP)
 
-- Local index or SQLite-backed search
-- Automatic cross-linking between notes
+- Local index or SQLite-backed search (measure latency first; see Performance Guidance)
 - Voice capture or mobile capture
 - Obsidian plugin behaviour
 - Vault migration from existing notes
 - Concurrent cross-device sync
+- Richer automation (batch imports, scheduled reviews, template variants)

@@ -111,6 +111,77 @@ See `references/provenance.md` for the six-layer taxonomy and source/licence/ret
 - Preserve source licence metadata; never invent licence text.
 - Distinguish biblical text, original-language observation, external source, user synthesis, and application in labelled sections.
 
+### Provenance Capture Format
+
+`source_refs` entries MUST preserve the actual tool name and arguments, not generic labels:
+
+```yaml
+source_refs:
+  - "theosis_mcp.get_study_notes(reference='2 Peter 2:13')"
+  - "theosis_mcp.word_study(strong='G2689')"
+```
+
+`source_licences` entries MUST preserve the source/edition and licence. When the licence is unknown, mark it as `licence: unknown` — never invent licence text.
+
+`retrieved_at` MUST be ISO-8601 and correspond positionally to `source_refs`/`source_licences` when multiple sources are used. For two sources:
+
+```yaml
+source_refs:
+  - "theosis_mcp.get_study_notes(reference='2 Peter 2:13')"
+  - "theosis_mcp.word_study(strong='G2689')"
+source_licences:
+  - "CC BY 4.0 (Aquifer Open Study Notes)"
+  - "Public Domain (Strong's Concordance)"
+retrieved_at:
+  - "2026-09-20T10:00:00Z"
+  - "2026-09-20T10:05:00Z"
+```
+
+Raw returned source text belongs in labelled source sections (`## Biblical text`, `## Original-language observation`, `## External source`), not silently in `## User synthesis`.
+
+### Provenance Capture Checklist (copy-pasteable recipe)
+
+Before finalising any note, run through this checklist:
+
+1. [ ] `source_refs` contains the actual tool name and arguments used (e.g. `theosis_mcp.get_study_notes(reference='...')`), not a generic label.
+2. [ ] `source_licences` entries exist for each source; unknown licences are marked `licence: unknown`.
+3. [ ] `retrieved_at` is ISO-8601 and positionally aligned with `source_refs` and `source_licences`.
+4. [ ] Raw source text appears only in the appropriate labelled section (Biblical text, Original-language observation, External source).
+5. [ ] `## User synthesis` contains only the user's own words, not raw source output.
+6. [ ] Provenance label matches the dominant content layer of the note.
+
+## Opt-in Scripture Linking
+
+Automatic Scripture detection/normalization and automatic wiki-link insertion are **OFF by default**. This avoids noisy backlinks that pollute the vault's link graph.
+
+When the user requests Scripture linking:
+
+1. **Detect** — identify Scripture references in the note text and show them to the user.
+2. **Propose** — list candidate related notes that could be linked.
+3. **Preserve** — keep the user's exact Scripture reference text unchanged.
+4. **Approve** — add wiki-links only after explicit approval of the exact links.
+5. **Search/backlinks remain available manually** — the user can always search for `[[reference]]` or related notes without automatic linking.
+
+## Safe Edits to Existing Notes
+
+When editing an existing note, follow this workflow to prevent data loss:
+
+1. **Read current** — read the existing file and confirm its contents.
+2. **Produce a unified diff or preview** — show the exact changes to the user.
+3. **Separate explicit approval** — wait for the user to approve the exact changes.
+4. **Re-read immediately before patch** — re-read the file to detect any changes since the diff was generated.
+5. **Patch only the approved note** under `readwrite/theosis-notes/`.
+6. **Read back and verify** — confirm the edit landed correctly.
+
+**Abort rather than overwrite** on a changed file, collision, or conflict. Never force overwrite or force-push. Preserve both sides of a conflict and stop for user resolution. When in doubt, leave both versions intact and let the user decide.
+
+## Performance Guidance
+
+Keep file scanning while the vault is small — `search_files` over `.md` files in `readwrite/theosis-notes/` is fast for hundreds of notes. When searching becomes noticeably slow:
+
+1. **Measure first** — check the note count (`search_files(pattern='*.md', target='files', ...)`) and time a search before proposing a local index.
+2. **Propose, don't add** — only suggest a local index or SQLite-backed search after measured need; do not add an index in this change.
+
 ## No Silent AI Attribution
 
 - The user owns the note. Never attribute authorship to "AI" or "Hermes" unless the user explicitly requests it.
