@@ -118,7 +118,7 @@ See `references/provenance.md` for the six-layer taxonomy and source/licence/ret
 ```yaml
 source_refs:
   - "theosis_mcp.get_study_notes(reference='2 Peter 2:13')"
-  - "theosis_mcp.word_study(strong='G2689')"
+  - "theosis_mcp.word_study(strongs='G2689')"
 ```
 
 `source_licences` entries MUST preserve the source/edition and licence. When the licence is unknown, mark it as `licence: unknown` — never invent licence text.
@@ -128,7 +128,7 @@ source_refs:
 ```yaml
 source_refs:
   - "theosis_mcp.get_study_notes(reference='2 Peter 2:13')"
-  - "theosis_mcp.word_study(strong='G2689')"
+  - "theosis_mcp.word_study(strongs='G2689')"
 source_licences:
   - "CC BY 4.0 (Aquifer Open Study Notes)"
   - "Public Domain (Strong's Concordance)"

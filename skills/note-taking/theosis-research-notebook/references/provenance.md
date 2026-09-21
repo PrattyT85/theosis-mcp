@@ -29,7 +29,7 @@ When multiple sources are used, `source_refs`, `source_licences`, and `retrieved
 ```yaml
 source_refs:
   - "theosis_mcp.get_study_notes(reference='2 Peter 2:13')"
-  - "theosis_mcp.word_study(strong='G2689')"
+  - "theosis_mcp.word_study(strongs='G2689')"
 source_licences:
   - "CC BY 4.0 (Aquifer Open Study Notes)"
   - "Public Domain (Strong's Concordance)"
