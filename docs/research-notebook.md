@@ -103,7 +103,7 @@ Notes use UTF-8 Markdown with YAML front matter. Required fields:
 - `provenance` — six-layer provenance label
 - `created` / `updated` — ISO dates
 
-Optional: `source_licences`, `retrieved_at`.
+When `source_refs` is present, `source_licences` and `retrieved_at` are **required** and must be positionally aligned with `source_refs`. When there are no external sources, both are optional (empty placeholder in template).
 
 Body sections (all required): Biblical text, Original-language observation, External source, Historical/cultural context, User synthesis, Application.
 

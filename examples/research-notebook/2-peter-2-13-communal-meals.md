@@ -8,11 +8,14 @@ scripture_refs:
 tags:
   - "false-teachers"
 source_refs:
-  - "Theosis: get_study_notes(2 Peter 2:13)"
-  - "Theosis: word_study(G2689)"
+  - "theosis_mcp.get_study_notes(reference='2 Peter 2:13')"
+  - "theosis_mcp.word_study(strongs='G2689')"
 source_licences:
   - "CC BY 4.0 (Aquifer Open Study Notes)"
-retrieved_at: "2026-09-20T10:00:00Z"
+  - "Public Domain (Strong's Concordance)"
+retrieved_at:
+  - "2026-09-20T10:00:00Z"
+  - "2026-09-20T10:05:00Z"
 provenance: user-synthesis
 created: "2026-09-20"
 updated: "2026-09-20"

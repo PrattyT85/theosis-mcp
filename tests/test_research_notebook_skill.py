@@ -307,19 +307,6 @@ class TestExampleNote:
 
 
 # ---------------------------------------------------------------------------
-# Template ↔ Example heading consistency (class-level)
-# ---------------------------------------------------------------------------
-
-class TestTemplateExampleConsistency:
-    """Verify template and example have the same section headings."""
-
-    def test_headings_match(self):
-        tmpl = _extract_headings(_read(TEMPLATE_PATH))
-        ex = _extract_headings(_read(EXAMPLE_PATH))
-        assert tmpl == ex, f"Template {tmpl} != example {ex}"
-
-
-# ---------------------------------------------------------------------------
 # Provenance reference
 # ---------------------------------------------------------------------------
 
@@ -534,14 +521,16 @@ class TestProvenanceCapture:
         source_refs_lines = [
             line.strip().lstrip("- ").strip('"').strip("'")
             for line in fm.splitlines()
-            if "source_refs" in line or (re.match(r'^\s+-\s+"?Theosis', line) or re.match(r'^\s+-\s+"?theosis', line))
+            if re.match(r'^\s+-\s+"?theosis_mcp\.', line)
         ]
-        # The example has tool calls like 'Theosis: get_study_notes(2 Peter 2:13)'
         combined = "\n".join(source_refs_lines)
-        assert "get_study_notes" in combined or "word_study" in combined or (
-            "theosis" in combined.lower()
-        ), (
-            "Example source_refs must contain actual tool names with arguments"
+        assert len(source_refs_lines) >= 2, (
+            f"Example must have at least 2 theosis_mcp.* source_refs, "
+            f"got {len(source_refs_lines)}"
+        )
+        assert "get_study_notes(" in combined or "word_study(" in combined, (
+            "Example source_refs must contain theosis_mcp.get_study_notes or "
+            "theosis_mcp.word_study tool calls"
         )
 
     # --- licence and ISO retrieval metadata ---
@@ -573,16 +562,30 @@ class TestProvenanceCapture:
         )
 
     def test_example_has_retrieved_at_iso_format(self):
-        """Example note retrieved_at must be ISO-8601 format."""
+        """Example note retrieved_at must be ISO-8601 format (scalar or list)."""
         fm = _parse_front_matter(self._example())
-        keys = _extract_keys_from_yaml(fm)
-        retrieved = keys.get("retrieved_at", "")
-        # Strip surrounding quotes that YAML preserves
-        retrieved = retrieved.strip('"').strip("'")
-        # ISO-8601 basic check: YYYY-MM-DDTHH:MM:SS or with timezone
-        assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", retrieved), (
-            f"Example retrieved_at '{retrieved}' is not ISO-8601 format"
-        )
+        # Extract retrieved_at items from the YAML list
+        items = []
+        in_block = False
+        for line in fm.splitlines():
+            if line.strip().startswith("retrieved_at:"):
+                # Could be scalar or list start
+                rest = line.split("retrieved_at:", 1)[1].strip().strip('"').strip("'")
+                if rest and re.match(r"\d{4}-\d{2}-\d{2}T", rest):
+                    items.append(rest)
+                in_block = True
+                continue
+            if in_block:
+                m = re.match(r'\s+-\s+"(.+)"', line)
+                if m:
+                    items.append(m.group(1))
+                else:
+                    in_block = False
+        assert len(items) >= 1, "Example must have at least one retrieved_at entry"
+        for retrieved in items:
+            assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", retrieved), (
+                f"Example retrieved_at '{retrieved}' is not ISO-8601 format"
+            )
 
     def test_example_has_source_licences(self):
         """Example note must have source_licences entries."""
@@ -1104,70 +1107,97 @@ class TestExampleProvenanceFormat:
     def _example(self) -> str:
         return _read(EXAMPLE_PATH)
 
-    def test_example_source_refs_have_tool_with_arguments(self):
-        """Example source_refs must show tool names with parenthesised arguments."""
-        example = self._example()
-        # Must have at least one source_ref with a pattern like:
-        # "Theosis: tool_name(arguments)" or "theosis_mcp.tool_name(...)"
-        assert re.search(
-            r"get_study_notes\(.*\)|word_study\(.*\)|theosis_mcp\.\w+\(.*\)",
-            example
-        ), (
-            "Example source_refs must show tool names with arguments in "
-            "parentheses"
+    def _parse_yaml_list(self, fm: str, key: str) -> list[str]:
+        """Extract list items under a YAML key from front matter text."""
+        items = []
+        in_block = False
+        for line in fm.splitlines():
+            if line.strip().startswith(f"{key}:"):
+                in_block = True
+                continue
+            if in_block:
+                m = re.match(r'\s+-\s+"(.+)"', line)
+                if m:
+                    items.append(m.group(1))
+                else:
+                    in_block = False
+        return items
+
+    def test_example_source_refs_use_theosis_mcp_dot_call_syntax(self):
+        """Example source_refs must use canonical 'theosis_mcp.<tool>(<args>)' syntax."""
+        fm = _parse_front_matter(self._example())
+        source_refs = self._parse_yaml_list(fm, "source_refs")
+        assert len(source_refs) >= 2, (
+            f"Example must have at least 2 source_refs, got {len(source_refs)}"
         )
+        for ref in source_refs:
+            assert re.match(r"theosis_mcp\.\w+\(", ref), (
+                f"source_ref '{ref}' must use 'theosis_mcp.<tool>(<args>)' syntax"
+            )
+        # Check specific tools are present
+        combined = " ".join(source_refs)
+        assert "get_study_notes(" in combined, "source_refs must include get_study_notes"
+        assert "word_study(" in combined, "source_refs must include word_study"
 
     def test_example_source_licences_are_not_invented(self):
         """Example source_licences must use real or explicitly unknown labels,
         never invented/generic text.
         """
         fm = _parse_front_matter(self._example())
-        # Extract source_licences values
-        in_licences = False
-        licences = []
-        for line in fm.splitlines():
-            if line.strip().startswith("source_licences:"):
-                in_licences = True
-                continue
-            if in_licences:
-                m = re.match(r'\s+-\s+"(.+)"', line)
-                if m:
-                    licences.append(m.group(1))
-                else:
-                    in_licences = False
+        licences = self._parse_yaml_list(fm, "source_licences")
         assert len(licences) > 0, "Example must have at least one source_licence"
-        # Check they're not just "unknown" for everything when the example
-        # has real content (the example uses "CC BY 4.0 (Aquifer Open Study Notes)")
-        has_real = any("cc" in l.lower() or "by" in l.lower() or "public" in l.lower() or "unknown" in l.lower() for l in licences)
-        assert has_real, (
-            f"Example source_licences should have real or 'unknown' labels, got: {licences}"
-        )
+        for l in licences:
+            has_real = any(
+                term in l.lower()
+                for term in ("cc", "by", "public", "unknown", "domain")
+            )
+            assert has_real, (
+                f"source_licence '{l}' should have a real or 'unknown' label"
+            )
 
     def test_example_retrieved_at_matches_source_count(self):
-        """When multiple sources exist, retrieved_at should have positional
-        alignment (at least documented that it corresponds).
-        """
+        """retrieved_at list must be positionally aligned with source_refs."""
         fm = _parse_front_matter(self._example())
+        source_refs = self._parse_yaml_list(fm, "source_refs")
+        retrieved = self._parse_yaml_list(fm, "retrieved_at")
+        # retrieved_at may be a single string (scalar) or a list; if scalar
+        # and source_refs has >1 entry, that's a positional misalignment.
         keys = _extract_keys_from_yaml(fm)
-        # The example currently has a single retrieved_at string.
-        # For multiple sources, it should be a list — but the key point is
-        # that the skill/provenance docs mandate positional alignment.
-        # We just verify the key exists and is valid ISO-8601.
-        retrieved = keys.get("retrieved_at", "").strip('"').strip("'")
-        assert re.match(r"\d{4}-\d{2}-\d{2}T", retrieved), (
-            f"Example retrieved_at must be ISO-8601, got: {retrieved}"
-        )
+        raw_retrieved = keys.get("retrieved_at", "").strip('"').strip("'")
+        if not retrieved and raw_retrieved:
+            # Scalar value — only valid for single-source notes
+            assert len(source_refs) <= 1, (
+                f"Multiple source_refs ({len(source_refs)}) but retrieved_at "
+                "is a scalar — must be a list for positional alignment"
+            )
+            assert re.match(r"\d{4}-\d{2}-\d{2}T", raw_retrieved), (
+                f"Example retrieved_at must be ISO-8601, got: {raw_retrieved}"
+            )
+        else:
+            # List — must have same count as source_refs
+            assert len(retrieved) == len(source_refs), (
+                f"retrieved_at count ({len(retrieved)}) must equal "
+                f"source_refs count ({len(source_refs)})"
+            )
+            for ts in retrieved:
+                assert re.match(r"\d{4}-\d{2}-\d{2}T", ts), (
+                    f"retrieved_at entry '{ts}' must be ISO-8601"
+                )
 
-    def test_example_two_source_refs_with_two_licences(self):
-        """Example demonstrates multi-source handling: two source_refs
-        and corresponding licence entries.
-        """
+    def test_example_source_counts_are_equal(self):
+        """source_refs, source_licences, and retrieved_at must have equal counts."""
         fm = _parse_front_matter(self._example())
-        source_count = fm.count("Theosis:") + fm.count("theosis:")
-        licence_count = fm.count("source_licences:")
-        # The example has 2 source_refs (Theosis: get_study_notes + word_study)
-        assert source_count >= 2, (
-            f"Example should have at least 2 source_refs, found ~{source_count}"
+        source_refs = self._parse_yaml_list(fm, "source_refs")
+        licences = self._parse_yaml_list(fm, "source_licences")
+        retrieved = self._parse_yaml_list(fm, "retrieved_at")
+        # All must have the same length for positional alignment
+        assert len(source_refs) == len(licences), (
+            f"source_refs count ({len(source_refs)}) must equal "
+            f"source_licences count ({len(licences)})"
+        )
+        assert len(source_refs) == len(retrieved), (
+            f"source_refs count ({len(source_refs)}) must equal "
+            f"retrieved_at count ({len(retrieved)})"
         )
 
 

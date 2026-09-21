@@ -16,9 +16,9 @@ Every research note MUST declare a provenance label that identifies the primary 
 ## Source, Licence, and Retrieval Rules
 
 - Record `source_refs` for every external source used. Each entry MUST preserve the actual tool name and arguments (e.g. `theosis_mcp.get_study_notes(reference='2 Peter 2:13')`), not a generic label.
-- Preserve `source_licences` alongside each source reference.
-- When the licence is unknown, mark it as `licence: unknown` — never invent licence text.
-- Record `retrieved_at` as an ISO datetime for each external retrieval.
+- When `source_refs` is present, `source_licences` and `retrieved_at` are **required** and must be positionally aligned (entry N in each list corresponds to the same source). When there are no external sources, both are optional.
+- Preserve `source_licences` alongside each source reference. When the licence is unknown, mark it as `licence: unknown` — never invent licence text.
+- Record `retrieved_at` as an ISO-8601 datetime for each external retrieval.
 - Preserve edition identifiers (e.g. LSJ, BDB, Aquifer, Tyndale) in `source_refs`.
 - Keep the provenance label honest: if a section mixes layers, label the dominant one and note the exception.
 

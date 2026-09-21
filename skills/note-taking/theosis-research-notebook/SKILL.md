@@ -69,8 +69,8 @@ Use ordinary UTF-8 Markdown with YAML front matter and Obsidian `[[wiki-links]]`
 | `scripture_refs` | yes | List of Scripture references, e.g. `["2 Peter 2:13"]` |
 | `tags` | yes | Case-insensitive tags for search |
 | `source_refs` | yes | Machine-readable source/tool references |
-| `source_licences` | no | Licence metadata for each source (include when source data is available; the template carries this as an empty placeholder to be populated) |
-| `retrieved_at` | no | ISO datetime of source retrieval (include when source data is available; the template carries this as an empty placeholder to be populated) |
+| `source_licences` | conditional | Licence metadata for each source. **Required** when `source_refs` is present; otherwise optional (empty placeholder in template). Must be positionally aligned with `source_refs`. |
+| `retrieved_at` | conditional | ISO-8601 datetime of source retrieval. **Required** when `source_refs` is present; otherwise optional (empty placeholder in template). Must be positionally aligned with `source_refs` and `source_licences`. |
 | `provenance` | yes | Six-layer provenance label (see `references/provenance.md`) |
 | `created` | yes | ISO date of note creation |
 | `updated` | yes | ISO date of last update |
