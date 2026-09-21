@@ -1,6 +1,6 @@
 ---
 name: theosis-research-notebook
-description: Use when capturing theological observations, Scripture study notes, or research syntheses as portable Obsidian notes linked to the Theosis database.
+description: Use when capturing theological notes in Obsidian.
 version: 1.0.0
 author: Theosis Contributors
 license: MIT
