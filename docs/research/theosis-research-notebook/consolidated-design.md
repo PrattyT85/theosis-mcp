@@ -27,7 +27,7 @@ Theosis/MCP unavailability must disable enrichment only; local capture and readi
 
 ## Canonical note schema
 
-Use YAML front matter at the beginning of a UTF-8 Markdown file with a stable `id`, `title`, `note_type`, Scripture references, tag/topic list, source references, provenance labels, and ISO timestamps. Keep optional source metadata flat. Use labelled Markdown sections for biblical text, original-language observation, external source, historical/cultural context, user synthesis, and application. The canonical tag field is unresolved: Obsidian research recommends `tags`, while the proposal names `topics`.
+Use YAML front matter at the beginning of a UTF-8 Markdown file with a stable `id`, `title`, `note_type`, Scripture references, `tags` list, source references, provenance labels, and ISO timestamps. Keep optional source metadata flat. Use labelled Markdown sections for biblical text, original-language observation, external source, historical/cultural context, user synthesis, and application. The canonical field is `tags` (Obsidian-compatible plural); the earlier `topics` name has been retired.
 
 ## MCP surface and approval model
 
@@ -55,8 +55,8 @@ The offline unit and handler tests can run without PostgreSQL or `THEOSIS_MCP_UR
 
 ## Open questions deferred beyond the vertical slice
 
-- Should the final implementation be a Hermes skill/Obsidian integration or a filesystem-backed module exposed by this MCP repository?
-- Should the canonical property be `tags`, `topics`, or a compatibility alias?
+- ~~Should the final implementation be a Hermes skill/Obsidian integration or a filesystem-backed module exposed by this MCP repository?~~ **Resolved:** Hermes skill plus Obsidian `readwrite/` integration (selected after research review).
+- ~~Should the canonical property be `tags`, `topics`, or a compatibility alias?~~ **Resolved:** `tags` (Obsidian-compatible plural) is canonical; `topics` has been retired.
 - Should IDs be UUID/ULID or deterministic filename slugs plus an internal stable ID?
 - Is PyYAML acceptable as a dependency, or should the first slice use a narrow parser?
 - How should concurrent cross-device edits and future vault synchronization be handled?

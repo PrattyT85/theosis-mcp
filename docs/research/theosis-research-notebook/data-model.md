@@ -12,7 +12,7 @@ Required or MVP fields:
 - `title`: human-readable title.
 - `note_type`: observation, research, synthesis, or application.
 - `scripture_refs`: list of references.
-- `tags`: list of tags; the proposal currently calls this `topics`, so this naming must be resolved before implementation.
+- `tags`: list of tags; the earlier `topics` name has been retired — `tags` is the canonical Obsidian-compatible field.
 - `source_refs`: machine-readable source/tool references.
 - `provenance`: explicit source/user layer labels.
 - `created`: ISO date.

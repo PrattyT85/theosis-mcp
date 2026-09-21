@@ -13,6 +13,11 @@ source_licences:
   - "{{licence}}"
 retrieved_at: "{{retrieved_at}}"
 provenance: user-synthesis
+# Choose the appropriate provenance label from references/provenance.md:
+#   biblical-text, original-language, external-source,
+#   historical-context, user-synthesis, application.
+# For source-derived notes, change from the default user-synthesis
+# to the actual source layer.
 created: "{{date}}"
 updated: "{{date}}"
 ---

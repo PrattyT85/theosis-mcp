@@ -13,7 +13,7 @@ Every research note MUST declare a provenance label that identifies the primary 
 | 5. User synthesis | `user-synthesis` | The user's own interpretation, connecting insights across sources. Clearly separate from sourced material. |
 | 6. Application | `application` | Practical, devotional, or study application drawn from the synthesis. |
 
-## Source and Licence Rules
+## Source, Licence, and Retrieval Rules
 
 - Record `source_refs` for every external source used.
 - Preserve `source_licences` alongside each source reference.
@@ -22,7 +22,7 @@ Every research note MUST declare a provenance label that identifies the primary 
 - Preserve edition identifiers (e.g. LSJ, BDB, Aquifer, Tyndale) in `source_refs`.
 - Keep the provenance label honest: if a section mixes layers, label the dominant one and note the exception.
 
-## Retrieval Metadata
+### Retrieval Metadata
 
 | Field | Purpose |
 |-------|---------|
@@ -30,7 +30,7 @@ Every research note MUST declare a provenance label that identifies the primary 
 | `source_refs` | Machine-readable tool calls or URLs (e.g. `Theosis: word_study(G3650)`) |
 | `source_licences` | Licence string per source (e.g. `CC BY 4.0`, `Public Domain`) |
 
-## Attribution Rules
+## Attribution and AI Labelling Rules
 
 - The note author is the user, not AI.
 - Never silently attribute AI-generated content to a named human source.

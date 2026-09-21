@@ -16,7 +16,7 @@ Model the Jonathan Edwards-inspired workflow:
 2. Capture it quickly.
 3. Restate it in the user's own words.
 4. Expand it into an indexed note.
-5. Link it to Scripture, topics, and sources.
+5. Link it to Scripture, tags, and sources.
 6. Review related notes later and synthesize them.
 
 ## MVP acceptance criteria
@@ -40,7 +40,7 @@ title: "2 Peter 2:13 — Communal meals and false practice"
 note_type: observation # observation, research, synthesis, application
 scripture_refs:
   - "2 Peter 2:13"
-topics:
+tags:
   - "false teachers"
   - "communal meals"
 source_refs:
@@ -54,8 +54,8 @@ The exact schema must be validated against the existing architecture before impl
 
 ## Architecture questions
 
-- Is the notebook best implemented in this repository, in a separate Theosis repository, or as a Hermes plugin/integration?
-- Should Markdown/Obsidian be canonical, with a local index for search?
+- ~~Is the notebook best implemented in this repository, in a separate Theosis repository, or as a Hermes plugin/integration?~~ **Resolved:** Hermes skill plus Obsidian `readwrite/` integration (see `docs/research/theosis-research-notebook/consolidated-design.md`).
+- ~~Should Markdown/Obsidian be canonical, with a local index for search?~~ **Resolved:** Markdown/Obsidian is canonical; no local index in the MVP.
 - How should Theosis MCP results and source metadata be stored in notes?
 - How can the notebook work when Theosis MCP or Hermes is unavailable?
 - Which APIs can Hermes Desktop use for planning, delegation, and filesystem work?

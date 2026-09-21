@@ -29,7 +29,7 @@ Follow the six-step observe → capture → restate → expand → link → revi
 2. **Capture** — draft a note quickly using the bundled template (`templates/research-note.md`).
 3. **Restate** — rewrite the observation in the user's own words; never copy source text verbatim without a source label.
 4. **Expand** — fill all six body sections and front-matter fields; add source references, licence metadata, and retrieval timestamps.
-5. **Link** — connect to Scripture references, other notes via `[[wiki-links]]`, and tag topics.
+5. **Link** — connect to Scripture references, other notes via `[[wiki-links]]`, and tags.
 6. **Review** — periodically review related notes to surface cross-connections and refine synthesis.
 
 ## Draft → Approve → Write Protocol
@@ -69,8 +69,8 @@ Use ordinary UTF-8 Markdown with YAML front matter and Obsidian `[[wiki-links]]`
 | `scripture_refs` | yes | List of Scripture references, e.g. `["2 Peter 2:13"]` |
 | `tags` | yes | Case-insensitive tags for search |
 | `source_refs` | yes | Machine-readable source/tool references |
-| `source_licences` | no | Licence metadata for each source |
-| `retrieved_at` | no | ISO datetime of source retrieval |
+| `source_licences` | no | Licence metadata for each source (include when source data is available; the template carries this as an empty placeholder to be populated) |
+| `retrieved_at` | no | ISO datetime of source retrieval (include when source data is available; the template carries this as an empty placeholder to be populated) |
 | `provenance` | yes | Six-layer provenance label (see `references/provenance.md`) |
 | `created` | yes | ISO date of note creation |
 | `updated` | yes | ISO date of last update |
