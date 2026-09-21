@@ -6,13 +6,16 @@ Source: http://www.bible.literarystructure.info/bible/bible_e.html
 Licence: CC BY 4.0 (attribution required)
 
 Pure parser functions for pericope list sheets and structure analysis sheets.
-No database dependency — safe for offline testing and dry-run reporting.
+PostgreSQL import mode applies idempotent upserts into 004 tables.
+No verse text is ever stored.
 
 Usage:
   uv run python scripts/import_literary_structure.py --workbooks-dir ./data \
       --dry-run --source-type pericope_list
   uv run python scripts/import_literary_structure.py --workbooks-dir ./data \
       --source-type structure
+  uv run python scripts/import_literary_structure.py --workbooks-dir ./data \
+      --source-type structure --db-url postgresql://theosis:...@localhost:5432/theosis
 """
 from __future__ import annotations
 
@@ -33,24 +36,118 @@ LICENCE = "CC-BY-4.0"
 SOURCE_URL = "http://www.bible.literarystructure.info/bible/bible_e.html"
 ATTRIBUTION = "Hajime Murai, Literary Structure of the Bible"
 
+# ---------------------------------------------------------------------------
+# Worksheet-name → scope/stable-code mapping
+# ---------------------------------------------------------------------------
+# The Murai workbooks use full worksheet names (Genesis, Exodus, Samuel, …).
+# This maps every observed sheet name to a stable scope code.
+# Grouped OT sheets (Samuel, Kings, Chronicles, Ezra-Nehemiah) use compound
+# scope codes rather than pretending one sheet is only 1 Samuel.
+# Sheets not in this list fall back to the raw sheet name.
+
+SHEET_TO_OSIS: dict[str, str] = {
+    # ── Full worksheet names (observed in actual .xlsx sheets) ───────────
+    # OT — full names
+    "Genesis": "Gen", "Exodus": "Exo", "Leviticus": "Lev",
+    "Numbers": "Num", "Deuteronomy": "Deu", "Joshua": "Jos",
+    "Judges": "Jdg", "Ruth": "Rut",
+    # Grouped OT sheets (one sheet spans multiple books)
+    "Samuel": "Sam", "Kings": "Kgs", "Chronicles": "Chr",
+    "Ezra-Nehemiah": "EzrNeh",
+    "Esther": "Est", "Job": "Job", "Psalms": "Psa",
+    "Proverbs": "Pro", "Ecclesiastes": "Ecc",
+    "SongofSolomon": "Sng",
+    "Isaiah": "Isa", "Jeremiah": "Jer", "Lamentation": "Lam",
+    "Ezekiel": "Ezk", "Daniel": "Dan",
+    "Hosea": "Hos", "Joel": "Jol", "Amos": "Amo",
+    "Obadiah": "Oba", "Jonah": "Jon", "Micah": "Mic",
+    "Nahum": "Nam", "Habakkuk": "Hab", "Zephaniah": "Zep",
+    "Haggai": "Hag", "Zechariah": "Zec", "Malachi": "Mal",
+    # NT — full names
+    "Matthew": "Mat", "Mark": "Mrk", "Luke": "Luk", "John": "Jhn",
+    "Acts": "Act", "Romans": "Rom",
+    "1Corinthians": "1Co", "2Corinthians": "2Co",
+    "Galatians": "Gal", "Ephesians": "Eph",
+    "Philippians": "Php", "Colossians": "Col",
+    "1Thessalonians": "1Th", "2Thessalonians": "2Th",
+    "1Timothy": "1Ti", "2Timothy": "2Ti",
+    "Titus": "Tit", "Philemon": "Phm", "Hebrews": "Heb",
+    "James": "Jas", "1Peter": "1Pe", "2Peter": "2Pe",
+    "1John": "1Jn", "2John": "2Jn", "3John": "3Jn",
+    "Jude": "Jud", "Revelation": "Rev",
+    # ── Abbreviated sheet names (legacy / alternate workbooks) ───────────
+    "Gen": "Gen", "Exo": "Exo", "Lev": "Lev", "Num": "Num",
+    "Deu": "Deu", "Jos": "Jos", "Jug": "Jug", "Rut": "Rut",
+    "1S": "1Sa", "2S": "2Sa",
+    "1Ki": "1Ki", "2Ki": "2Ki",
+    "1Ch": "1Ch", "2Ch": "2Ch",
+    "Ezr": "Ezr", "Neh": "Neh", "1Ne": "Neh",
+    "Est": "Est",
+    "Job": "Job", "Psa": "Psa", "Pro": "Pro", "Ecc": "Ecc",
+    "Sng": "Sng", "Isa": "Isa", "Jer": "Jer", "Lam": "Lam",
+    "Eze": "Eze", "Dan": "Dan", "Hos": "Hos", "Joe": "Joe",
+    "Amo": "Amo", "Oba": "Oba", "Ob": "Oba",
+    "Jon": "Jon", "Mic": "Mic", "Nam": "Nam", "Hab": "Hab",
+    "Zep": "Zep", "Hag": "Hag", "Zec": "Zec", "Mal": "Mal",
+    "Mat": "Mat", "Mar": "Mar", "Luk": "Luk", "Jhn": "Jhn",
+    "Act": "Act", "Rom": "Rom", "1Co": "1Co", "2Co": "2Co",
+    "Gal": "Gal", "Eph": "Eph", "Phi": "Phi", "Col": "Col",
+    "1Th": "1Th", "2Th": "2Th", "1Ti": "1Ti", "2Ti": "2Ti",
+    "Tit": "Tit", "Phm": "Phm", "Heb": "Heb",
+    "Jam": "Jam", "1Pe": "1Pe", "2Pe": "2Pe",
+    "1Jn": "1Jn", "2Jn": "2Jn", "3Jn": "3Jn",
+    "Jud": "Jud", "Rev": "Rev",
+    # ── Alternate long forms that may appear ─────────────────────────────
+    "Samuel1": "1Sa", "Samuel2": "2Sa",
+    "Kings1": "1Ki", "Kings2": "2Ki",
+    "Chronicles1": "1Ch", "Chronicles2": "2Ch",
+    "Chron1": "1Ch", "Chron2": "2Ch",
+    "Corinthians1": "1Co", "Corinthians2": "2Co",
+    "Thessalonians1": "1Th", "Thessalonians2": "2Th",
+    "Timothy1": "1Ti", "Timothy2": "2Ti",
+    "John1": "1Jn", "John2": "2Jn", "John3": "3Jn",
+    "Peter1": "1Pe", "Peter2": "2Pe",
+    # ── Case-variant abbreviations ───────────────────────────────────────
+    "psa": "Psa", "pro": "Pro", "isa": "Isa",
+    "1sa": "1Sa", "2sa": "2Sa", "1ki": "1Ki", "2ki": "2Ki",
+    "1ch": "1Ch", "2ch": "2Ch", "1co": "1Co", "2co": "2Co",
+    "1th": "1Th", "2th": "2Th", "1ti": "1Ti", "2ti": "2Ti",
+    "1jn": "1Jn", "2jn": "2Jn", "3jn": "3Jn",
+    "1pe": "1Pe", "2pe": "2Pe",
+}
+
+
+def sheet_to_osis(sheet_name: str) -> str:
+    """Map a worksheet name to an OSIS book code.
+
+    Falls back to the raw sheet name when the name is not in the lookup table.
+    """
+    return SHEET_TO_OSIS.get(sheet_name, sheet_name)
+
+
 # Workbooks observed in the wild
 KNOWN_WORKBOOKS: dict[str, dict[str, str]] = {
-    "PericopeList_OT.xlsx": {
+    "LiteraryStructureoftheBible_PericopeList_OT.xlsx": {
         "source_id": "murai_pericope_ot",
         "source_type": "pericope_list",
     },
-    "PericopeList_NT.xlsx": {
+    "LiteraryStructureoftheBible_PericopeList_NT.xlsx": {
         "source_id": "murai_pericope_nt",
         "source_type": "pericope_list",
     },
-    "PericopeStructure_OT.xlsx": {
+    "LiteraryStructureoftheBible_PericopeStructure_OT.xlsx": {
         "source_id": "murai_structure_ot",
         "source_type": "structure",
     },
-    "PericopeStructure_NT.xlsx": {
+    "LiteraryStructureoftheBible_PericopeStructure_NT.xlsx": {
         "source_id": "murai_structure_nt",
         "source_type": "structure",
     },
+    # Accept the shorter historical filenames too.
+    "PericopeList_OT.xlsx": {"source_id": "murai_pericope_ot", "source_type": "pericope_list"},
+    "PericopeList_NT.xlsx": {"source_id": "murai_pericope_nt", "source_type": "pericope_list"},
+    "PericopeStructure_OT.xlsx": {"source_id": "murai_structure_ot", "source_type": "structure"},
+    "PericopeStructure_NT.xlsx": {"source_id": "murai_structure_nt", "source_type": "structure"},
 }
 
 
@@ -280,6 +377,10 @@ def parse_structure_sheet(
     Blank rows (all cells empty/None) are treated as unit separators and skipped.
     Yields one dict per non-blank row.
     """
+    # Track current [N] header for parent/child hierarchy
+    current_header: str | None = None
+    current_unit_seq = 0
+
     for row_idx, row in enumerate(rows):
         if not row or all(c is None or str(c).strip() == "" for c in row):
             continue
@@ -288,6 +389,11 @@ def parse_structure_sheet(
         desc_ja = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
         desc_en = str(row[2]).strip() if len(row) > 2 and row[2] is not None else ""
         translit = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ""
+
+        # Defaults for every yielded row (overridden below for child rows)
+        parent_label: str | None = None
+        unit_sequence: int | None = None
+        depth = 0
 
         # Detect cross-references in the English description (NT pattern)
         cross_refs = None
@@ -302,25 +408,22 @@ def parse_structure_sheet(
 
         parsed_ref = parse_reference(ref_in_label) if ref_in_label else None
 
-        # Determine parent and unit sequence from label
-        # e.g. "A" → parent=None, "B1" → parent=None, "A'" → parent=None
-        # Nesting depth is inferred from label prefix patterns
-        parent_label = None
-        unit_sequence = None
-        depth = 0
-
-        # Simple depth heuristic: count leading digits or primes
-        if re.match(r"^\[", label):
-            depth = 0  # Top-level [N] marker
-        elif re.match(r"^[A-Z]\d", label):
-            depth = 1
-        elif re.match(r"^[A-Z]", label):
-            depth = 0
-        elif re.match(r"^\d+\.", label):
-            depth = 1
-
-        # Check if it's a [N] row (pericope header)
+        # ── Header detection and hierarchy tracking ──────────────────────
         is_header = bool(re.match(r"^\[\d+\]$", label))
+
+        if is_header:
+            current_header = label
+            current_unit_seq = 0
+        elif label and re.match(r"^[A-Z]", label) and current_header:
+            # Child row with an explicit letter label (A, B, A', B1, …)
+            current_unit_seq += 1
+            parent_label = current_header
+            unit_sequence = current_unit_seq
+            depth = 1
+        elif current_header:
+            # Row within a header block but no explicit label (summary, ref)
+            parent_label = current_header
+            depth = 0
 
         yield {
             "source_id": source_id,
@@ -407,6 +510,11 @@ def main() -> None:
         help="Force source type for all workbooks (default: auto-detect)"
     )
     parser.add_argument(
+        "--db-url",
+        default=os.environ.get("THEOSIS_DATABASE_URL"),
+        help="PostgreSQL connection URL (default: THEOSIS_DATABASE_URL env var)"
+    )
+    parser.add_argument(
         "--output", choices=["json", "text"], default="text",
         help="Output format (default: text)"
     )
@@ -438,6 +546,9 @@ def main() -> None:
             if not rows:
                 continue
 
+            # Map sheet name to OSIS code for the book field
+            book = sheet_to_osis(sheet_name)
+
             manifest = source_manifest(
                 source_id=source_id,
                 source_type=source_type,
@@ -448,13 +559,13 @@ def main() -> None:
 
             if source_type == "pericope_list":
                 for item in parse_pericope_list_sheet(
-                    rows, book=sheet_name, source_id=source_id,
+                    rows, book=book, source_id=source_id,
                     workbook_name=wb_name, worksheet_name=sheet_name,
                 ):
                     all_items.append(item)
             elif source_type == "structure":
                 for item in parse_structure_sheet(
-                    rows, book=sheet_name, source_id=source_id,
+                    rows, book=book, source_id=source_id,
                     workbook_name=wb_name, worksheet_name=sheet_name,
                 ):
                     all_items.append(item)
@@ -462,6 +573,21 @@ def main() -> None:
         wb.close()
 
     report = dry_run_report(all_items, all_malformed, source_id="aggregate")
+
+    # ── PostgreSQL import ──────────────────────────────────────────────────
+    if not args.dry_run:
+        db_url = args.db_url
+        if not db_url:
+            print("ERROR: --db-url or THEOSIS_DATABASE_URL required for import mode",
+                  file=sys.stderr)
+            sys.exit(1)
+        _import_to_database(
+            db_url=db_url,
+            manifests=manifests,
+            all_items=all_items,
+            workbooks=workbooks,
+        )
+        print("Import complete.")
 
     if args.output == "json":
         import json
@@ -477,6 +603,215 @@ def main() -> None:
         print(f"Items parsed: {report['total_rows']}")
         print(f"Malformed rows: {report['malformed_count']}")
         print(f"Verse text present: {report['verse_text_present']}")
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL import
+# ---------------------------------------------------------------------------
+
+def _import_to_database(
+    *,
+    db_url: str,
+    manifests: list[dict[str, Any]],
+    all_items: list[dict[str, Any]],
+    workbooks: list[Path],
+) -> None:
+    """Import parsed items into the literary_structure tables.
+
+    Uses idempotent upserts in a single transaction per workbook group.
+    Creates source rows, pericope/structure rows, and cross-ref links.
+    Never imports verse text.
+    """
+    import asyncio
+
+    async def _do_import() -> None:
+        import asyncpg  # type: ignore[import-untyped]
+
+        conn = await asyncpg.connect(db_url)
+        try:
+            # ── Source manifests ───────────────────────────────────────────
+            for m in manifests:
+                await conn.execute(
+                    """
+                    INSERT INTO public.literary_structure_sources
+                        (source_id, source_type, licence, url, attribution,
+                         workbook_name, workbook_hash, worksheet_name, version_hint)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (source_id, worksheet_name) DO UPDATE SET
+                        source_type   = EXCLUDED.source_type,
+                        licence       = EXCLUDED.licence,
+                        url           = EXCLUDED.url,
+                        attribution   = EXCLUDED.attribution,
+                        workbook_name = EXCLUDED.workbook_name,
+                        workbook_hash = EXCLUDED.workbook_hash,
+                        version_hint  = EXCLUDED.version_hint,
+                        imported_at   = now()
+                    """,
+                    m["source_id"], m["source_type"], m["licence"], m["url"],
+                    m["attribution"], m["workbook_path"], m["workbook_hash"],
+                    m["worksheet_name"], m.get("version_hint"),
+                )
+            print(f"  Upserted {len(manifests)} source manifest rows.")
+
+            # ── Pericope items ─────────────────────────────────────────────
+            pericope_items = [i for i in all_items if "sequence" in i and "title" in i]
+            for item in pericope_items:
+                pr = item.get("parsed_reference", {})
+                await conn.execute(
+                    """
+                    INSERT INTO public.literary_pericopes
+                        (source_id, book, sequence, raw_reference,
+                         start_chapter, start_verse, start_suffix,
+                         end_chapter, end_verse, end_suffix,
+                         title, workbook_name, worksheet_name, excel_row)
+                    VALUES ($1, $2, $3, $4,
+                            $5, $6, $7, $8, $9, $10,
+                            $11, $12, $13, $14)
+                    ON CONFLICT (source_id, book, sequence) DO UPDATE SET
+                        raw_reference = EXCLUDED.raw_reference,
+                        start_chapter = EXCLUDED.start_chapter,
+                        start_verse   = EXCLUDED.start_verse,
+                        start_suffix  = EXCLUDED.start_suffix,
+                        end_chapter   = EXCLUDED.end_chapter,
+                        end_verse     = EXCLUDED.end_verse,
+                        end_suffix    = EXCLUDED.end_suffix,
+                        title         = EXCLUDED.title,
+                        workbook_name = EXCLUDED.workbook_name,
+                        worksheet_name= EXCLUDED.worksheet_name,
+                        excel_row     = EXCLUDED.excel_row
+                    """,
+                    item["source_id"], item["book"], item["sequence"],
+                    item.get("raw_reference", ""),
+                    pr.get("start_chapter"), pr.get("start_verse"),
+                    pr.get("start_suffix"),
+                    pr.get("end_chapter"), pr.get("end_verse"),
+                    pr.get("end_suffix"),
+                    item.get("title", ""), item.get("workbook_name", ""),
+                    item.get("worksheet_name", ""), item.get("excel_row"),
+                )
+            if pericope_items:
+                print(f"  Upserted {len(pericope_items)} pericope rows.")
+
+            # ── Structure items ────────────────────────────────────────────
+            structure_items = [i for i in all_items if "structure_label" in i]
+            for item in structure_items:
+                pr = item.get("parsed_reference") or {}
+                # Determine the book from cross_ref patterns for NT cross-refs
+                cross_refs = item.get("cross_references")
+                await conn.execute(
+                    """
+                    INSERT INTO public.literary_structures
+                        (source_id, book, structure_label, is_header,
+                         parent_label, unit_sequence, depth,
+                         raw_reference,
+                         start_chapter, start_verse, start_suffix,
+                         end_chapter, end_verse, end_suffix,
+                         description_ja, description_en, transliteration,
+                         cross_references,
+                         workbook_name, worksheet_name, excel_row)
+                    VALUES ($1, $2, $3, $4,
+                            $5, $6, $7,
+                            $8, $9, $10, $11,
+                            $12, $13, $14,
+                            $15, $16, $17, $18,
+                            $19, $20, $21)
+                    ON CONFLICT (source_id, book, structure_label, excel_row) DO UPDATE SET
+                        is_header      = EXCLUDED.is_header,
+                        parent_label   = EXCLUDED.parent_label,
+                        unit_sequence  = EXCLUDED.unit_sequence,
+                        depth          = EXCLUDED.depth,
+                        raw_reference  = EXCLUDED.raw_reference,
+                        start_chapter  = EXCLUDED.start_chapter,
+                        start_verse    = EXCLUDED.start_verse,
+                        start_suffix   = EXCLUDED.start_suffix,
+                        end_chapter    = EXCLUDED.end_chapter,
+                        end_verse      = EXCLUDED.end_verse,
+                        end_suffix     = EXCLUDED.end_suffix,
+                        description_ja = EXCLUDED.description_ja,
+                        description_en = EXCLUDED.description_en,
+                        transliteration= EXCLUDED.transliteration,
+                        cross_references= EXCLUDED.cross_references,
+                        workbook_name  = EXCLUDED.workbook_name,
+                        worksheet_name = EXCLUDED.worksheet_name,
+                        excel_row      = EXCLUDED.excel_row
+                    RETURNING id
+                    """,
+                    item["source_id"], item["book"], item["structure_label"],
+                    item.get("is_header", False),
+                    item.get("parent_label"), item.get("unit_sequence"),
+                    item.get("depth", 0),
+                    item.get("raw_reference", ""),
+                    pr.get("start_chapter"), pr.get("start_verse"),
+                    pr.get("start_suffix"),
+                    pr.get("end_chapter"), pr.get("end_verse"),
+                    pr.get("end_suffix"),
+                    item.get("description_ja", ""),
+                    item.get("description_en", ""),
+                    item.get("transliteration", ""),
+                    cross_refs,
+                    item.get("workbook_name", ""),
+                    item.get("worksheet_name", ""),
+                    item.get("excel_row"),
+                )
+            if structure_items:
+                print(f"  Upserted {len(structure_items)} structure rows.")
+
+            # ── Cross-reference links ──────────────────────────────────────
+            link_count = 0
+            for item in structure_items:
+                cross_refs = item.get("cross_references")
+                if not cross_refs:
+                    continue
+                # Look up the structure id for this row
+                sid = await conn.fetchval(
+                    """
+                    SELECT id FROM public.literary_structures
+                    WHERE source_id = $1 AND book = $2
+                      AND structure_label = $3 AND excel_row = $4
+                    """,
+                    item["source_id"], item["book"],
+                    item["structure_label"], item.get("excel_row"),
+                )
+                if not sid:
+                    continue
+                # Parse cross-ref targets (e.g. "42_Luke@13,23_Isaiah@10")
+                targets = _parse_cross_ref_targets(cross_refs)
+                for target in targets:
+                    await conn.execute(
+                        """
+                        INSERT INTO public.literary_structure_links
+                            (source_id, structure_id, target_passage, link_type)
+                        VALUES ($1, $2, $3, 'cross_reference')
+                        ON CONFLICT (source_id, structure_id, target_passage) DO NOTHING
+                        """,
+                        item["source_id"], sid, target,
+                    )
+                    link_count += 1
+            if link_count:
+                print(f"  Created {link_count} cross-reference links.")
+
+        finally:
+            await conn.close()
+
+    asyncio.run(_do_import())
+
+
+def _parse_cross_ref_targets(raw: str) -> list[str]:
+    """Parse a raw cross-reference string into individual target passages.
+
+    Handles patterns like "42_Luke@13,23_Isaiah@10" and plain comma-separated refs.
+    Returns a list of target passage strings suitable for storage.
+    """
+    targets: list[str] = []
+    if not raw:
+        return targets
+    # Pattern: number_BookName@chapter,chapter,...
+    for part in re.split(r"[,;]\s*", raw):
+        part = part.strip()
+        if not part:
+            continue
+        targets.append(part)
+    return targets
 
 
 if __name__ == "__main__":

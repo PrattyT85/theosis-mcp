@@ -1082,6 +1082,246 @@ async def handle_compare_variant_readings(args: dict[str, Any]) -> list[TextCont
     return text(result)
 
 
+# =============================================================================
+# Literary Structure Corpus handlers
+# =============================================================================
+
+LIT_STRUCT_ATTRIBUTION = (
+    "Source: Hajime Murai, \"Literary Structure of the Bible\" "
+    "(CC BY 4.0)\n"
+    "http://www.bible.literarystructure.info/bible/bible_e.html\n\n"
+    "⚠️ DISCLAIMER: These structures are scholarly interpretive proposals, "
+    "not canonical or doctrinal divisions. They reflect one analyst's "
+    "literary reading of the biblical text and should be treated as "
+    "study aids, not authoritative chapter/verse divisions."
+)
+
+
+async def handle_list_literary_structure_sources(args: dict[str, Any]) -> list[TextContent]:
+    limit = args.get("limit", 50)
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT source_id, source_type, licence, url, attribution,
+                   workbook_name, worksheet_name, version_hint, imported_at
+            FROM public.literary_structure_sources
+            ORDER BY source_id, worksheet_name
+            LIMIT $1
+            """,
+            limit,
+        )
+    if not rows:
+        return text("No literary structure sources imported yet.\n\n" + LIT_STRUCT_ATTRIBUTION)
+
+    result = "## Literary Structure Sources\n\n"
+    result += LIT_STRUCT_ATTRIBUTION + "\n\n"
+    result += "| Source ID | Type | Worksheet | Licence | Imported |\n"
+    result += "|-----------|------|-----------|---------|----------|\n"
+    for r in rows:
+        imported = r["imported_at"].strftime("%Y-%m-%d") if r["imported_at"] else ""
+        result += f"| {r['source_id']} | {r['source_type']} | {r['worksheet_name']} | {r['licence']} | {imported} |\n"
+    result += f"\n{len(rows)} source(s).\n"
+    return text(result)
+
+
+async def handle_list_literary_structures(args: dict[str, Any]) -> list[TextContent]:
+    book = args.get("book", "")
+    if not book:
+        return text("Please provide a 'book' OSIS code (e.g., 'Gen', 'Mat').")
+    source_id = args.get("source_id")
+    limit = args.get("limit", 200)
+    params: list[Any] = [book, limit]
+    sql = """
+        SELECT id, source_id, book, structure_label, is_header,
+               depth, raw_reference, start_chapter, start_verse,
+               end_chapter, end_verse, description_ja, description_en,
+               transliteration, cross_references
+        FROM public.literary_structures
+        WHERE book = $1
+    """
+    if source_id:
+        sql += " AND source_id = $3"
+        params = [book, limit, source_id]
+    sql += " ORDER BY excel_row LIMIT $2"
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(sql, *params)
+    if not rows:
+        return text(f"No literary structures found for {book}.")
+
+    result = f"## Literary Structures: {book}\n\n"
+    result += LIT_STRUCT_ATTRIBUTION + "\n\n"
+    for r in rows:
+        label = r["structure_label"] or ""
+        hdr = " [header]" if r["is_header"] else ""
+        result += f"### {label}{hdr} (ID: {r['id']})\n"
+        result += f"**Source**: {r['source_id']}\n"
+        ref = r["raw_reference"] or ""
+        if r["start_chapter"]:
+            ref = f"{r['start_chapter']}:{r['start_verse']}" if r["start_verse"] else str(r["start_chapter"])
+            if r["end_chapter"] and r["end_chapter"] != r["start_chapter"]:
+                ref += f"-{r['end_chapter']}:{r['end_verse']}"
+            elif r["end_verse"]:
+                ref += f"-{r['end_verse']}"
+        if ref:
+            result += f"**Reference**: {book} {ref}\n"
+        if r["description_en"]:
+            result += f"**English**: {r['description_en']}\n"
+        if r["description_ja"]:
+            result += f"**Japanese**: {r['description_ja']}\n"
+        if r["transliteration"]:
+            result += f"**Transliteration**: {r['transliteration']}\n"
+        result += "\n---\n\n"
+    if len(rows) == limit:
+        result += f"\n*Showing {limit} results (use a narrower filter or higher limit).*\n"
+    return text(result)
+
+
+async def handle_get_literary_structure(args: dict[str, Any]) -> list[TextContent]:
+    sid = args.get("id")
+    if not sid:
+        return text("Please provide a structure 'id'.")
+    include_links = args.get("include_links", True)
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, source_id, book, structure_label, is_header,
+                   parent_label, unit_sequence, depth, raw_reference,
+                   start_chapter, start_verse, start_suffix,
+                   end_chapter, end_verse, end_suffix,
+                   description_ja, description_en, transliteration,
+                   cross_references, workbook_name, worksheet_name, excel_row
+            FROM public.literary_structures
+            WHERE id = $1
+            """,
+            sid,
+        )
+        links: list = []
+        if include_links and row:
+            links = await conn.fetch(
+                """
+                SELECT target_passage, link_type
+                FROM public.literary_structure_links
+                WHERE structure_id = $1
+                ORDER BY target_passage
+                """,
+                sid,
+            )
+    if not row:
+        return text(f"Structure ID {sid} not found.")
+
+    result = f"## Literary Structure #{row['id']}\n\n"
+    result += LIT_STRUCT_ATTRIBUTION + "\n\n"
+    result += f"**Book**: {row['book']}\n"
+    result += f"**Label**: {row['structure_label']}\n"
+    result += f"**Source**: {row['source_id']}\n"
+    if row["is_header"]:
+        result += "**Header**: Yes\n"
+    if row["depth"]:
+        result += f"**Depth**: {row['depth']}\n"
+    if row["raw_reference"]:
+        result += f"**Raw Reference**: {row['raw_reference']}\n"
+    if row["description_en"]:
+        result += f"**English**: {row['description_en']}\n"
+    if row["description_ja"]:
+        result += f"**Japanese**: {row['description_ja']}\n"
+    if row["transliteration"]:
+        result += f"**Transliteration**: {row['transliteration']}\n"
+    if row["cross_references"]:
+        result += f"**Cross-references**: {row['cross_references']}\n"
+    if row["workbook_name"]:
+        result += f"**Workbook**: {row['workbook_name']} / {row['worksheet_name']}\n"
+    if row["excel_row"]:
+        result += f"**Excel row**: {row['excel_row']}\n"
+
+    if include_links and links:
+        result += "\n**Cross-reference links**:\n"
+        for link in links:
+            result += f"- {link['target_passage']} ({link['link_type']})\n"
+
+    return text(result)
+
+
+async def handle_search_literary_structures(args: dict[str, Any]) -> list[TextContent]:
+    query = args.get("query", "")
+    if not query:
+        return text("Please provide a 'query' to search.")
+    book = args.get("book")
+    limit = args.get("limit", 20)
+
+    # Build a tsvector search across description_ja, description_en, transliteration
+    # Use plainto_tsquery for safe full-text search
+    params: list[Any] = [query, limit]
+    sql = """
+        SELECT id, source_id, book, structure_label, description_en,
+               description_ja, transliteration, raw_reference,
+               ts_rank_cd(
+                   to_tsvector('simple', coalesce(description_en,'') || ' ' || coalesce(description_ja,'') || ' ' || coalesce(transliteration,'') || ' ' || coalesce(structure_label,'')),
+                   plainto_tsquery('simple', $1)
+               ) AS rank
+        FROM public.literary_structures
+        WHERE to_tsvector('simple', coalesce(description_en,'') || ' ' || coalesce(description_ja,'') || ' ' || coalesce(transliteration,'') || ' ' || coalesce(structure_label,''))
+              @@ plainto_tsquery('simple', $1)
+    """
+    if book:
+        sql += " AND book = $3"
+        params = [query, limit, book]
+    sql += " ORDER BY rank DESC, book LIMIT $2"
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(sql, *params)
+    if not rows:
+        return text(f"No literary structures found matching '{query}'.")
+
+    result = f"## Literary Structure Search: '{query}'\n\n"
+    result += LIT_STRUCT_ATTRIBUTION + "\n\n"
+    for r in rows:
+        label = r["structure_label"] or ""
+        result += f"### {r['book']} — {label} (ID: {r['id']})\n"
+        result += f"**Source**: {r['source_id']}\n"
+        if r["description_en"]:
+            result += f"**English**: {r['description_en'][:200]}\n"
+        if r["description_ja"]:
+            result += f"**Japanese**: {r['description_ja'][:100]}\n"
+        if r["transliteration"]:
+            result += f"**Translit**: {r['transliteration'][:100]}\n"
+        result += "\n---\n\n"
+    if len(rows) == limit:
+        result += f"\n*Showing top {limit} results.*\n"
+    return text(result)
+
+
+async def handle_get_literary_parallel(args: dict[str, Any]) -> list[TextContent]:
+    book = args.get("book", "")
+    if not book:
+        return text("Please provide a 'book' OSIS code.")
+    limit = args.get("limit", 20)
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, source_id, book, structure_label, description_en,
+                   cross_references, raw_reference
+            FROM public.literary_structures
+            WHERE book = $1
+              AND cross_references IS NOT NULL
+              AND cross_references != ''
+            ORDER BY excel_row
+            LIMIT $2
+            """,
+            book, limit,
+        )
+    if not rows:
+        return text(f"No literary structures with cross-references found for {book}.")
+
+    result = f"## Literary Parallels for {book}\n\n"
+    result += LIT_STRUCT_ATTRIBUTION + "\n\n"
+    for r in rows:
+        result += f"### {r['structure_label']} (ID: {r['id']})\n"
+        if r["description_en"]:
+            result += f"**Description**: {r['description_en'][:300]}\n"
+        result += f"**Cross-references**: {r['cross_references']}\n"
+        result += "\n---\n\n"
+    return text(result)
+
+
 _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
@@ -1115,6 +1355,12 @@ _TOOL_HANDLERS = {
     "get_textual_variants": handle_get_textual_variants,
     "list_manuscript_witnesses": handle_list_manuscript_witnesses,
     "compare_variant_readings": handle_compare_variant_readings,
+    # Literary structure tools
+    "list_literary_structure_sources": handle_list_literary_structure_sources,
+    "list_literary_structures": handle_list_literary_structures,
+    "get_literary_structure": handle_get_literary_structure,
+    "search_literary_structures": handle_search_literary_structures,
+    "get_literary_parallel": handle_get_literary_parallel,
 }
 
 # =============================================================================

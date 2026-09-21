@@ -559,4 +559,116 @@ significance, scholarly consensus, and provenance when present.""",
             "required": ["reference"]
         }
     ),
+
+    # =========================================================================
+    # Literary Structure Corpus (read-only, CC BY 4.0 via Hajime Murai)
+    # =========================================================================
+
+    Tool(
+        name="list_literary_structure_sources",
+        annotations=ToolAnnotations(title="List Literary Structure Sources", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""List imported literary structure and pericope-analysis sources.
+
+Source: Hajime Murai, "Literary Structure of the Bible"
+http://www.bible.literarystructure.info/bible/bible_e.html
+Licence: CC BY 4.0
+
+⚠️ DISCLAIMER: These structures are scholarly interpretive proposals, not
+canonical or doctrinal divisions. They reflect one analyst's literary reading
+of the biblical text and should be treated as study aids, not authoritative
+chapter/verse divisions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Max sources. Default: 50"}
+            }
+        }
+    ),
+    Tool(
+        name="list_literary_structures",
+        annotations=ToolAnnotations(title="List Literary Structures", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""List literary structures for a given book.
+
+Source: Hajime Murai, CC BY 4.0
+http://www.bible.literarystructure.info/bible/bible_e.html
+
+⚠️ DISCLAIMER: These are scholarly interpretive proposals, not canonical
+chapter/verse divisions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "book": {"type": "string", "description": "OSIS book code (e.g., 'Gen', 'Mat', '1Sa')"},
+                "source_id": {"type": "string", "description": "Filter by source (e.g., 'murai_structure_ot')"},
+                "limit": {"type": "integer", "description": "Max rows. Default: 200"}
+            },
+            "required": ["book"]
+        }
+    ),
+    Tool(
+        name="get_literary_structure",
+        annotations=ToolAnnotations(title="Get Literary Structure", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Get a single literary structure entry by ID.
+
+Source: Hajime Murai, CC BY 4.0
+http://www.bible.literarystructure.info/bible/bible_e.html
+
+⚠️ DISCLAIMER: This is a scholarly interpretive proposal, not a canonical
+division. References, descriptions, and cross-references are preserved
+as-is from the analyst's workbook.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer", "description": "Structure row ID"},
+                "include_links": {"type": "boolean", "description": "Include cross-reference links. Default: true"}
+            },
+            "required": ["id"]
+        }
+    ),
+    Tool(
+        name="search_literary_structures",
+        annotations=ToolAnnotations(title="Search Literary Structures", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Full-text search across literary structure descriptions.
+
+Source: Hajime Murai, CC BY 4.0
+http://www.bible.literarystructure.info/bible/bible_e.html
+
+Searches Japanese descriptions, English summaries, transliterations,
+and structure labels. Returns results with source attribution.
+
+⚠️ DISCLAIMER: Results reflect scholarly interpretive proposals, not
+canonical divisions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search term"},
+                "book": {"type": "string", "description": "Optional book filter (OSIS code)"},
+                "limit": {"type": "integer", "description": "Max results. Default: 20"}
+            },
+            "required": ["query"]
+        }
+    ),
+    Tool(
+        name="get_literary_parallel",
+        annotations=ToolAnnotations(title="Get Literary Parallel", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Find literary parallel structures across books.
+
+Returns structural analyses for the given book that contain cross-references
+to other books, identifying parallel literary patterns. Useful for tracing
+thematic or structural echoes between OT and NT passages.
+
+Source: Hajime Murai, CC BY 4.0
+http://www.bible.literarystructure.info/bible/bible_e.html
+
+⚠️ DISCLAIMER: These parallels are scholarly interpretive proposals.
+The identification of parallel structures does not imply a doctrinal or
+theological relationship between the cited passages.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "book": {"type": "string", "description": "OSIS book code to find parallels for"},
+                "limit": {"type": "integer", "description": "Max results. Default: 20"}
+            },
+            "required": ["book"]
+        }
+    ),
 ]

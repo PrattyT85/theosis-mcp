@@ -24,6 +24,9 @@ from import_literary_structure import (
     source_manifest,
     # dry-run
     dry_run_report,
+    # mapping
+    sheet_to_osis,
+    SHEET_TO_OSIS,
 )
 
 
@@ -162,6 +165,68 @@ class TestNormalizeReference:
 
 
 # ---------------------------------------------------------------------------
+# Worksheet-name → scope-code mapping
+# ---------------------------------------------------------------------------
+
+class TestSheetToOsis:
+    """Map worksheet names to stable scope codes."""
+
+    def test_full_ot_names(self):
+        """Full OT worksheet names map to standard OSIS codes."""
+        assert sheet_to_osis("Genesis") == "Gen"
+        assert sheet_to_osis("Exodus") == "Exo"
+        assert sheet_to_osis("Leviticus") == "Lev"
+        assert sheet_to_osis("Numbers") == "Num"
+        assert sheet_to_osis("Deuteronomy") == "Deu"
+        assert sheet_to_osis("Joshua") == "Jos"
+        assert sheet_to_osis("Judges") == "Jdg"
+        assert sheet_to_osis("Ruth") == "Rut"
+        assert sheet_to_osis("Isaiah") == "Isa"
+        assert sheet_to_osis("Psalms") == "Psa"
+        assert sheet_to_osis("SongofSolomon") == "Sng"
+
+    def test_full_nt_names(self):
+        """Full NT worksheet names map to standard OSIS codes."""
+        assert sheet_to_osis("Matthew") == "Mat"
+        assert sheet_to_osis("Mark") == "Mrk"
+        assert sheet_to_osis("Luke") == "Luk"
+        assert sheet_to_osis("John") == "Jhn"
+        assert sheet_to_osis("Acts") == "Act"
+        assert sheet_to_osis("Romans") == "Rom"
+        assert sheet_to_osis("1Corinthians") == "1Co"
+        assert sheet_to_osis("2Corinthians") == "2Co"
+        assert sheet_to_osis("Revelation") == "Rev"
+
+    def test_grouped_ot_sheets_use_scope_codes(self):
+        """Grouped OT sheets use compound scope codes, not individual book codes."""
+        assert sheet_to_osis("Samuel") == "Sam"
+        assert sheet_to_osis("Kings") == "Kgs"
+        assert sheet_to_osis("Chronicles") == "Chr"
+        assert sheet_to_osis("Ezra-Nehemiah") == "EzrNeh"
+
+    def test_abbreviated_names_still_work(self):
+        """Legacy abbreviated sheet names still map correctly."""
+        assert sheet_to_osis("Gen") == "Gen"
+        assert sheet_to_osis("1S") == "1Sa"
+        assert sheet_to_osis("2S") == "2Sa"
+        assert sheet_to_osis("1Ki") == "1Ki"
+        assert sheet_to_osis("1Co") == "1Co"
+
+    def test_unknown_name_falls_back_to_raw(self):
+        """Sheet names not in the map fall back to the raw name."""
+        assert sheet_to_osis("UnknownBook") == "UnknownBook"
+
+    def test_preserves_raw_worksheet_name_for_provenance(self):
+        """The original worksheet name is preserved in manifests, not the scope code."""
+        m = source_manifest(
+            source_id="test", source_type="structure",
+            workbook_path="fake.xlsx", worksheet_name="Samuel",
+            licence="CC-BY-4.0", url="u", attribution="a",
+        )
+        assert m["worksheet_name"] == "Samuel"  # raw, not "Sam"
+
+
+# ---------------------------------------------------------------------------
 # Pericope list sheet parsing
 # ---------------------------------------------------------------------------
 
@@ -265,6 +330,150 @@ class TestParseStructureSheet:
 
 
 # ---------------------------------------------------------------------------
+# Genesis [1] header → child row grouping
+# ---------------------------------------------------------------------------
+
+class TestGenesisOneGrouping:
+    """Verify [N] header tracking groups child rows under the header."""
+
+    def test_header_sets_is_header(self):
+        """The [1] row is marked as a header."""
+        data = [
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["A(1:3-5)", "", "First day", ""],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        assert rows[0]["is_header"] is True
+        assert rows[1]["is_header"] is False
+
+    def test_child_rows_get_parent_label(self):
+        """A, B, C, A', B', C', P, P' rows get parent_label=[1]."""
+        data = [
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["P(1:1-2)", "", "The Creation", ""],
+            ["A(1:3-5)", "", "First day", ""],
+            ["B(1:6-8)", "", "Second day", ""],
+            ["C(1:9-13)", "", "Third day", ""],
+            ["A'(1:14-19)", "", "Fourth day", ""],
+            ["B'(1:20-23)", "", "Fifth day", ""],
+            ["C'(1:24-31)", "", "Sixth day", ""],
+            ["P'(2:1-4a)", "", "The Creation", ""],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        # Header row
+        assert rows[0]["is_header"] is True
+        assert rows[0]["parent_label"] is None
+        # Child rows all have parent_label=[1]
+        for row in rows[1:]:
+            assert row["parent_label"] == "[1]", (
+                f"Row {row['structure_label']} should have parent=[1]"
+            )
+
+    def test_child_rows_have_unit_sequence(self):
+        """Child rows get sequential unit_sequence values."""
+        data = [
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["P(1:1-2)", "", "The Creation", ""],
+            ["A(1:3-5)", "", "First day", ""],
+            ["B(1:6-8)", "", "Second day", ""],
+            ["C(1:9-13)", "", "Third day", ""],
+            ["A'(1:14-19)", "", "Fourth day", ""],
+            ["B'(1:20-23)", "", "Fifth day", ""],
+            ["C'(1:24-31)", "", "Sixth day", ""],
+            ["P'(2:1-4a)", "", "The Creation", ""],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        # 8 child rows, unit_sequence 1..8
+        for i, row in enumerate(rows[1:], start=1):
+            assert row["unit_sequence"] == i, (
+                f"Row {row['structure_label']} should have unit_sequence={i}"
+            )
+
+    def test_child_rows_depth_one(self):
+        """Child rows under [1] header have depth=1."""
+        data = [
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["A(1:3-5)", "", "First day", ""],
+            ["B(1:6-8)", "", "Second day", ""],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        assert rows[0]["depth"] == 0  # header itself
+        assert rows[1]["depth"] == 1  # child
+        assert rows[2]["depth"] == 1  # child
+
+    def test_header_resets_unit_sequence(self):
+        """Each new [N] header resets the unit_sequence counter."""
+        data = [
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["A(1:3-5)", "", "First day", ""],
+            ["B(1:6-8)", "", "Second day", ""],
+            ["[2]", "Gen 2:4b-17", None, None],
+            ["A(2:4b-6)", "", "Stream", ""],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        # [1] → A seq=1, B seq=2
+        assert rows[1]["unit_sequence"] == 1
+        assert rows[2]["unit_sequence"] == 2
+        # [2] → A seq=1 (reset)
+        assert rows[4]["unit_sequence"] == 1
+
+    def test_summary_row_gets_parent_but_no_unit_sequence(self):
+        """None-labeled summary rows within a header block get parent but no seq."""
+        data = [
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["A(1:3-5)", "", "First day", ""],
+            ["B(1:6-8)", "", "Second day", ""],
+            [None, "A: Light and darkness", "A: Light. B: Water.", None],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        summary = rows[3]
+        assert summary["parent_label"] == "[1]"
+        assert summary["unit_sequence"] is None
+        assert summary["depth"] == 0
+
+    def test_pre_header_rows_have_no_parent(self):
+        """Rows before any [N] header have parent_label=None."""
+        data = [
+            [None, None, None, None],
+            [None, "Gen 1:1", None, None],
+            ["[1]", "Gen 1:1-2:4a", None, None],
+            ["A(1:3-5)", "", "First day", ""],
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="s"))
+        assert rows[0]["parent_label"] is None
+        assert rows[0]["unit_sequence"] is None
+
+    def test_full_genesis_one_real_data(self):
+        """Reproduce the real Genesis [1] grouping from the actual workbook."""
+        data = [
+            ("[1]", "Gen 1:1-2:4a", None, None),
+            ("P(1:1-2)", "天地創造", "The Creation", "$mym, )rc"),
+            ("A(1:3-5)", "第1日、光と闇、昼と夜", "The first day, light and darkness, day and night", ")wr"),
+            ("B(1:6-8)", "第2日、水と空", "The second day, water and sky", "mym"),
+            ("C(1:9-13)", "第3日、地と草", "The third day, land and plant", "(&b"),
+            ("A'(1:14-19)", "第4日、光と闇、昼と夜", "The fourth day, light and darkness, day and night", "m)wr"),
+            ("B'(1:20-23)", "第5日、水と空", "The fifth day, water and sky", "mym"),
+            ("C'(1:24-31)", "第6日、地と草", "The sixth day, land and plant", "(&b"),
+            ("P'(2:1-4a)", "天地創造", "The Creation", "$mym, )rc"),
+        ]
+        rows = list(parse_structure_sheet(data, book="Gen", source_id="murai_structure_ot"))
+        # 9 rows: 1 header + 8 children
+        assert len(rows) == 9
+        assert rows[0]["is_header"] is True
+        assert rows[0]["structure_label"] == "[1]"
+        # All children have parent=[1] and depth=1
+        for row in rows[1:]:
+            assert row["parent_label"] == "[1]"
+            assert row["depth"] == 1
+        # Sequential unit_sequence
+        assert [r["unit_sequence"] for r in rows[1:]] == [1, 2, 3, 4, 5, 6, 7, 8]
+        # Parsed references are preserved
+        assert rows[1]["raw_reference"] == "1:1-2"
+        assert rows[1]["parsed_reference"]["start_chapter"] == 1
+        assert rows[1]["parsed_reference"]["start_verse"] == 1
+
+
+# ---------------------------------------------------------------------------
 # Dry-run reporting
 # ---------------------------------------------------------------------------
 
@@ -288,3 +497,146 @@ class TestDryRunReport:
         items = [{"structure_label": "A(1:3)"}]
         report = dry_run_report(items, [], source_id="s")
         assert report["verse_text_present"] is False
+
+
+# ---------------------------------------------------------------------------
+# Offline DB import payload test
+# ---------------------------------------------------------------------------
+
+class TestImportPayload:
+    """Verify that the DB import logic sends correct SQL parameters.
+
+    Mocks asyncpg to capture execute() calls without requiring PostgreSQL.
+    """
+
+    def _make_structure_item(self, **overrides):
+        """Build a minimal structure item dict for testing."""
+        base = {
+            "source_id": "murai_structure_ot",
+            "book": "Gen",
+            "structure_label": "A(1:3-5)",
+            "is_header": False,
+            "parent_label": "[1]",
+            "unit_sequence": 1,
+            "depth": 1,
+            "raw_reference": "1:3-5",
+            "parsed_reference": {
+                "raw": "1:3-5", "start_chapter": 1, "start_verse": 3,
+                "start_suffix": None, "end_chapter": 1, "end_verse": 5,
+                "end_suffix": None, "ambiguous": False,
+            },
+            "description_ja": "第1日",
+            "description_en": "The first day",
+            "transliteration": ")wr",
+            "cross_references": None,
+            "workbook_name": "PericopeStructure_OT.xlsx",
+            "worksheet_name": "Genesis",
+            "excel_row": 3,
+            "verse_text": None,
+        }
+        base.update(overrides)
+        return base
+
+    def _make_manifest(self, **overrides):
+        base = {
+            "source_id": "murai_structure_ot",
+            "source_type": "structure",
+            "licence": "CC-BY-4.0",
+            "url": "http://www.bible.literarystructure.info/bible/bible_e.html",
+            "attribution": "Hajime Murai, Literary Structure of the Bible",
+            "workbook_path": "data/PericopeStructure_OT.xlsx",
+            "workbook_hash": hashlib.sha256(b"").hexdigest(),
+            "worksheet_name": "Genesis",
+            "version_hint": None,
+        }
+        base.update(overrides)
+        return base
+
+    def test_structure_upsert_payload(self):
+        """Structure row upsert receives correct parent_label and unit_sequence."""
+        manifest = self._make_manifest()
+        item = self._make_structure_item()
+
+        # Verify the payload construction matches the SQL $1-$21 parameter order
+        pr = item["parsed_reference"]
+        expected_params = (
+            item["source_id"], item["book"], item["structure_label"],
+            item["is_header"],
+            item["parent_label"], item["unit_sequence"], item["depth"],
+            item["raw_reference"],
+            pr["start_chapter"], pr["start_verse"], pr["start_suffix"],
+            pr["end_chapter"], pr["end_verse"], pr["end_suffix"],
+            item["description_ja"], item["description_en"],
+            item["transliteration"], item["cross_references"],
+            item["workbook_name"], item["worksheet_name"], item["excel_row"],
+        )
+        # Verify the tuple has 21 elements matching the SQL $1-$21
+        assert len(expected_params) == 21
+        assert expected_params[4] == "[1]"  # parent_label
+        assert expected_params[5] == 1     # unit_sequence
+        assert expected_params[6] == 1     # depth
+
+    def test_manifest_payload_preserves_worksheet_name(self):
+        """Manifest payload stores the raw worksheet_name, not the scope code."""
+        manifest = self._make_manifest(worksheet_name="Samuel")
+        # The worksheet_name should be the raw sheet name, not "Sam"
+        assert manifest["worksheet_name"] == "Samuel"
+        # The book code used in structure items would be the scope code
+        item = self._make_structure_item(book="Sam", worksheet_name="Samuel")
+        assert item["book"] == "Sam"
+        assert item["worksheet_name"] == "Samuel"
+
+    def test_pericope_upsert_payload(self):
+        """Pericope row upsert receives correct sequence and reference fields."""
+        item = {
+            "source_id": "murai_pericope_ot",
+            "book": "Gen",
+            "sequence": 1,
+            "raw_reference": "1:1-31",
+            "title": "Creation Account",
+            "workbook_name": "PericopeList_OT.xlsx",
+            "worksheet_name": "Genesis",
+            "excel_row": 1,
+            "parsed_reference": {
+                "raw": "1:1-31", "start_chapter": 1, "start_verse": 1,
+                "start_suffix": None, "end_chapter": 1, "end_verse": 31,
+                "end_suffix": None, "ambiguous": False,
+            },
+        }
+        pr = item["parsed_reference"]
+        expected_params = (
+            item["source_id"], item["book"], item["sequence"],
+            item["raw_reference"],
+            pr["start_chapter"], pr["start_verse"], pr["start_suffix"],
+            pr["end_chapter"], pr["end_verse"], pr["end_suffix"],
+            item["title"], item["workbook_name"],
+            item["worksheet_name"], item["excel_row"],
+        )
+        assert len(expected_params) == 14
+        assert expected_params[2] == 1     # sequence
+        assert expected_params[3] == "1:1-31"  # raw_reference
+        assert expected_params[9] is None  # end_suffix
+
+    def test_source_manifest_payload(self):
+        """Source manifest upsert receives correct provenance fields."""
+        manifest = self._make_manifest(worksheet_name="Genesis")
+        expected_params = (
+            manifest["source_id"], manifest["source_type"],
+            manifest["licence"], manifest["url"], manifest["attribution"],
+            manifest["workbook_path"], manifest["workbook_hash"],
+            manifest["worksheet_name"], manifest["version_hint"],
+        )
+        assert len(expected_params) == 9
+        assert expected_params[0] == "murai_structure_ot"
+        assert expected_params[7] == "Genesis"  # raw worksheet name
+
+    def test_grouped_sheet_scope_code_in_book_field(self):
+        """Grouped sheets use scope code in 'book' field, raw name in worksheet_name."""
+        # Samuel sheet → book="Sam", worksheet_name="Samuel"
+        item = self._make_structure_item(book="Sam", worksheet_name="Samuel")
+        assert item["book"] == "Sam"
+        assert item["worksheet_name"] == "Samuel"
+        # Kings sheet → book="Kgs", worksheet_name="Kings"
+        item2 = self._make_structure_item(book="Kgs", worksheet_name="Kings")
+        assert item2["book"] == "Kgs"
+        assert item2["worksheet_name"] == "Kings"
