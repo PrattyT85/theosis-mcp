@@ -139,7 +139,7 @@ Before merging a skill change:
 - [ ] Example note has no absolute home paths and uses fictional content only
 - [ ] Docs mention `OBSIDIAN_VAULT_PATH`, offline portability, and draft/approval workflow
 - [ ] README links to `docs/research-notebook.md` and the example
-- [ ] `git grep` finds no secrets, tokens, or private vault paths in committed files
+- [ ] `git grep` finds no secrets, credentials, or private vault paths in committed files
 
 ## Common Pitfalls
 
