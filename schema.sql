@@ -1756,6 +1756,87 @@ ALTER TABLE ONLY public.strongs_verse_map
 ALTER TABLE ONLY public.verse_embeddings
     ADD CONSTRAINT verse_embeddings_verse_id_fkey FOREIGN KEY (verse_id) REFERENCES public.verses(id);
 
+-- Literary structure corpus: pericope lists and structural analysis
+-- Source: Hajime Murai, Literary Structure of the Bible (CC BY 4.0)
+-- http://www.bible.literarystructure.info/bible/bible_e.html
+
+CREATE TABLE IF NOT EXISTS public.literary_structure_sources (
+    id              serial PRIMARY KEY,
+    source_id       text NOT NULL,
+    source_type     text NOT NULL,
+    licence         text NOT NULL DEFAULT 'CC-BY-4.0',
+    url             text,
+    attribution     text,
+    workbook_name   text,
+    workbook_hash   text,
+    worksheet_name  text,
+    version_hint    text,
+    imported_at     timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (source_id, worksheet_name)
+);
+
+CREATE TABLE IF NOT EXISTS public.literary_structures (
+    id              serial PRIMARY KEY,
+    source_id       text NOT NULL,
+    book            text NOT NULL,
+    structure_label text,
+    is_header       boolean NOT NULL DEFAULT false,
+    parent_label    text,
+    unit_sequence   integer,
+    depth           integer NOT NULL DEFAULT 0,
+    raw_reference   text,
+    start_chapter   integer,
+    start_verse     integer,
+    start_suffix    text,
+    end_chapter     integer,
+    end_verse       integer,
+    end_suffix      text,
+    description_ja  text,
+    description_en  text,
+    transliteration text,
+    cross_references text,
+    workbook_name   text,
+    worksheet_name  text,
+    excel_row       integer,
+    UNIQUE (source_id, book, structure_label, excel_row)
+);
+
+CREATE TABLE IF NOT EXISTS public.literary_pericopes (
+    id              serial PRIMARY KEY,
+    source_id       text NOT NULL,
+    book            text NOT NULL,
+    sequence        integer NOT NULL,
+    raw_reference   text,
+    start_chapter   integer,
+    start_verse     integer,
+    start_suffix    text,
+    end_chapter     integer,
+    end_verse       integer,
+    end_suffix      text,
+    title           text,
+    workbook_name   text,
+    worksheet_name  text,
+    excel_row       integer,
+    UNIQUE (source_id, book, sequence)
+);
+
+CREATE TABLE IF NOT EXISTS public.literary_structure_links (
+    id              serial PRIMARY KEY,
+    source_id       text NOT NULL,
+    structure_id    integer NOT NULL REFERENCES public.literary_structures(id) ON DELETE CASCADE,
+    target_passage  text NOT NULL,
+    link_type       text NOT NULL DEFAULT 'cross_reference',
+    UNIQUE (source_id, structure_id, target_passage)
+);
+
+CREATE INDEX idx_lit_struct_sources_source_id ON public.literary_structure_sources (source_id);
+CREATE INDEX idx_lit_struct_book_ref ON public.literary_structures (book, raw_reference);
+CREATE INDEX idx_lit_struct_source_book ON public.literary_structures (source_id, book);
+CREATE INDEX idx_lit_pericope_book_seq ON public.literary_pericopes (book, sequence);
+CREATE INDEX idx_lit_pericope_source ON public.literary_pericopes (source_id);
+CREATE INDEX idx_lit_struct_links_structure ON public.literary_structure_links (structure_id);
+CREATE INDEX idx_lit_struct_links_target ON public.literary_structure_links (target_passage);
+
 -- Search and lookup indexes used by the MCP server.
 CREATE INDEX idx_bible_books_translation_osis ON public.bible_books (translation_id, osis_ref);
 CREATE INDEX idx_bible_verses_book_chapter_verse ON public.bible_verses (book_id, chapter, verse);
