@@ -38,5 +38,5 @@ PyYAML with `safe_load`/`safe_dump` is sufficient for simple front matter read/w
 ## Sources
 
 - `docs/plans/theosis-research-notebook.md`
-- `/home/hermes/obsidian-vault/readwrite/Theosis-Research-Notebook-Desktop-Handoff.md`
+- The read-only Obsidian Desktop handoff document
 - Repository `.gitignore` and Python dependency configuration.

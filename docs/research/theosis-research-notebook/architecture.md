@@ -2,7 +2,7 @@
 
 ## Findings
 
-- `/home/hermes/repos/theosis-mcp` is a PostgreSQL-backed Python MCP server. Existing tools are exposed through `src/theosis_mcp/tools.py`, dispatched by `_TOOL_HANDLERS` in `src/theosis_mcp/server.py`, and tested with offline unit tests plus optional live MCP tests.
+- The current Theosis MCP repository is a PostgreSQL-backed Python MCP server. Existing tools are exposed through `src/theosis_mcp/tools.py`, dispatched by `_TOOL_HANDLERS` in `src/theosis_mcp/server.py`, and tested with offline unit tests plus optional live MCP tests.
 - Existing Theosis tools are read-only database queries. The repository has no existing notebook module, filesystem-backed MCP write tool, or notebook schema.
 - A separate Hermes skill/Obsidian-vault workflow is a cleaner ownership boundary for Markdown CRUD and vault policy because Hermes already has the relevant filesystem and Obsidian skills.
 - The current branch and product proposal, however, are in this Theosis MCP repository and the requested delivery is a GitHub PR from this branch.
@@ -35,5 +35,5 @@ The user selected the architecture recommendation: implement a Hermes skill plus
 - `src/theosis_mcp/database.py`
 - `schema.sql`
 - `tests/mcp_live_client.py`
-- `/home/hermes/.hermes/skills/software-development/theosis-mcp/SKILL.md`
+- The installed Hermes Theosis MCP skill
 - Hermes Desktop/delegation documentation.

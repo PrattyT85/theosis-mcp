@@ -36,5 +36,5 @@ Keep the first slice small: approval-gated capture, deterministic Markdown stora
 ## Sources
 
 - `docs/plans/theosis-research-notebook.md`
-- `/home/hermes/obsidian-vault/readwrite/Theosis-Research-Notebook-Desktop-Handoff.md`
+- The read-only Obsidian Desktop handoff document
 - Hermes Desktop and delegation documentation reviewed before delegation.

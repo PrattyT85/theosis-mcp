@@ -30,6 +30,6 @@ The installed Hermes Obsidian skill already defines the vault access policy (`re
 ## Sources
 
 - `docs/plans/theosis-research-notebook.md`
-- `/home/hermes/.hermes/skills/productivity/obsidian/SKILL.md`
-- `/home/hermes/.hermes/skills/software-development/theosis-mcp/SKILL.md`
+- The installed Hermes Obsidian skill
+- The installed Hermes Theosis MCP skill
 - `README.md`, `.gitignore`, and existing MCP tool annotations.
