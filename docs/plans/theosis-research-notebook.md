@@ -2,7 +2,7 @@
 
 ## Status
 
-Research completed through the required Hermes Desktop multi-agent workflow. The consolidated findings are in `docs/research/theosis-research-notebook/consolidated-design.md`; implementation is paused because the research recommends a Hermes-skill/Obsidian boundary while the current PR targets this MCP repository. Continue only after that boundary is explicitly chosen.
+Research completed through the required Hermes Desktop multi-agent workflow. The consolidated findings are in `docs/research/theosis-research-notebook/consolidated-design.md`; the selected implementation boundary is a Hermes skill plus Obsidian `readwrite/` integration, not filesystem write tools in the PostgreSQL MCP server.
 
 ## Goal
 

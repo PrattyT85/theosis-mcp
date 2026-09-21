@@ -22,9 +22,9 @@ The subagent referred to a `hermes-vault-sync.py` file; that exact file was not 
 - Tool descriptors belong in `src/theosis_mcp/tools.py`.
 - No `schema.sql` changes are needed for a Markdown-canonical MVP.
 
-## Blocker
+## Resolved boundary
 
-The architecture recommendation and the existing PR target disagree. Do not implement until the user chooses whether this PR should contain a filesystem-backed Theosis MCP slice or whether the deliverable should instead be a Hermes skill/Obsidian integration outside this repository.
+The user selected the architecture recommendation: implement a Hermes skill plus the existing Obsidian-vault filesystem workflow. The PR will contain the skill source, template, provenance guidance, tests, and documentation. It will not add filesystem write tools or schema changes to the PostgreSQL MCP server. The runtime skill will use the existing `readwrite/` policy and must never touch `readonly/` or `private/`.
 
 ## Sources
 

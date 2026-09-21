@@ -113,6 +113,13 @@ The importer preserves non-canonical books when the source edition includes them
 | `search_theological_works` | Search systematic theology by doctrine or phrase |
 | `get_theological_section` | Retrieve a full systematic theology section |
 
+## Research Notebook
+
+The Theosis Research Notebook is a Hermes skill for capturing theological observations and research syntheses as portable Obsidian Markdown notes, linked to Scripture and Theosis sources. It follows an observe → capture → restate → expand → link → review workflow and requires explicit user approval before writing to the vault.
+
+- [Documentation](docs/research-notebook.md) — installation, usage, schema, and workflow
+- [Example note](examples/research-notebook/2-peter-2-13-communal-meals.md) — sample research note with all six sections
+
 ## Credits
 
 Built on the foundation of [StudyBible MCP](https://github.com/djayatillake/studybible-mcp) by David Jayatillake.

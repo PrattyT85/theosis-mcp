@@ -10,7 +10,7 @@ Verified facts:
 - It has no notebook implementation or filesystem-backed MCP write tool.
 - The installed Hermes skills define the vault tiers and an editable `readwrite/` area, but the exact `hermes-vault-sync.py` filename claimed by one subagent was not found; the installed skill refers to `obsidian-vault-sync.py`.
 
-**Gate status: BLOCKED pending an explicit boundary choice.** Do not implement either a filesystem-backed MCP tool or a Hermes skill until the user chooses the delivery target. This is a genuine scope decision because it changes the codebase, security boundary, and what can be delivered through the current PR.
+**Decision: implement the Hermes skill plus Obsidian integration.** The user selected this boundary after the research review. This PR will ship the reusable skill source, note template, provenance guidance, tests, and documentation; it will not add filesystem write tools or schema changes to the PostgreSQL MCP server. The runtime skill will use the existing Obsidian skill's `readwrite/` policy and must never touch `readonly/` or `private/`.
 
 ## MVP user workflow
 
