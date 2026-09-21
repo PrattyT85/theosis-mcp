@@ -69,7 +69,7 @@ def test_literary_parallel_cross_references_are_returned():
 @pytestmark_live
 def test_reference_first_genesis_lookup():
     with _client() as client:
-        text = _tool_text(client.tools_call("get_literary_structure_by_reference", {"reference": "Genesis 1:1", "limit": 20}))
+        text = _tool_text(client.tools_call("get_literary_structure_by_reference", {"reference": "Genesis 1:1", "source_id": "murai_structure_ot", "limit": 20}))
     assert "Genesis 1:1" in text or "Gen 1:1" in text
     assert "The Creation" in text
     assert "Hajime Murai" in text
@@ -80,7 +80,7 @@ def test_reference_first_genesis_lookup():
 @pytestmark_live
 def test_nested_genesis_tree_is_rendered():
     with _client() as client:
-        text = _tool_text(client.tools_call("get_literary_tree", {"book": "Gen", "limit": 40}))
+        text = _tool_text(client.tools_call("get_literary_tree", {"book": "Gen", "source_id": "murai_structure_ot", "limit": 40}))
     assert "# Literary Structures" in text
     assert "[1]" in text
     assert "A(1:3-5)" in text
