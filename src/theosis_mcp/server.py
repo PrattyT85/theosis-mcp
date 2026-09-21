@@ -33,6 +33,14 @@ from mcp.types import Icon, TextContent, Tool
 
 from .database import TheosisDB, BOOK_ABBREV_MAP, BOOK_NAMES, BOOK_ORDER, get_db, get_db_url
 from .tools import TOOLS, _truncate
+from .literary_helpers import (
+    LIT_STRUCT_ATTRIBUTION,
+    normalize_book,
+    parse_ref_parts,
+    reference_overlaps,
+    render_structure_tree,
+    format_structure_result,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -1322,6 +1330,92 @@ async def handle_get_literary_parallel(args: dict[str, Any]) -> list[TextContent
     return text(result)
 
 
+async def handle_get_literary_structure_by_reference(args: dict[str, Any]) -> list[TextContent]:
+    """Look up literary structures by Bible reference (e.g. 'Gen 1:1')."""
+    reference = args.get("reference", "")
+    if not reference:
+        return text("Please provide a 'reference' (e.g., 'Gen 1:1', 'Genesis 1:1-31').")
+
+    source_id = args.get("source_id")
+    limit = args.get("limit", 50)
+
+    # Parse book from reference
+    query_book, ref_part = normalize_book(reference)
+    query_parts = parse_ref_parts(ref_part)
+
+    # Fetch the complete book/source slice before overlap filtering. Applying
+    # LIMIT in SQL first could hide matching rows later in the workbook.
+    params: list[Any] = []
+    sql = """
+        SELECT id, source_id, book, structure_label, is_header,
+               parent_label, unit_sequence, depth, raw_reference,
+               start_chapter, start_verse, end_chapter, end_verse,
+               description_ja, description_en, transliteration,
+               cross_references, excel_row
+        FROM public.literary_structures
+        WHERE 1 = 1
+    """
+    if query_book:
+        params.append(query_book)
+        sql += f" AND book = ${len(params)}"
+    if source_id:
+        params.append(source_id)
+        sql += f" AND source_id = ${len(params)}"
+    sql += " ORDER BY excel_row"
+
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(sql, *params)
+
+    if not rows:
+        return text(f"No structures found for '{reference}'.\n\n" + LIT_STRUCT_ATTRIBUTION)
+
+    # Filter by reference overlap (offline Python filter)
+    row_dicts = [dict(r) for r in rows]
+    matched = [r for r in row_dicts if reference_overlaps(r, query_book, query_parts)][:limit]
+
+    if not matched:
+        return text(f"No structures matching reference '{reference}' found.\n\n" + LIT_STRUCT_ATTRIBUTION)
+
+    result = format_structure_result(matched, reference, output_mode="flat")
+    return text(result)
+
+
+async def handle_get_literary_tree(args: dict[str, Any]) -> list[TextContent]:
+    """Render literary structures for a book as a nested tree."""
+    book = args.get("book", "")
+    if not book:
+        return text("Please provide a 'book' OSIS code (e.g., 'Gen', 'Mat').")
+
+    source_id = args.get("source_id")
+    limit = args.get("limit", 500)
+
+    params: list[Any] = [book]
+    sql = """
+        SELECT id, source_id, book, structure_label, is_header,
+               parent_label, unit_sequence, depth, raw_reference,
+               start_chapter, start_verse, end_chapter, end_verse,
+               description_ja, description_en, transliteration,
+               cross_references, excel_row
+        FROM public.literary_structures
+        WHERE book = $1
+    """
+    if source_id:
+        params.append(source_id)
+        sql += f" AND source_id = ${len(params)}"
+    sql += " ORDER BY excel_row LIMIT $" + str(len(params) + 1)
+    params.append(limit)
+
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(sql, *params)
+
+    if not rows:
+        return text(f"No literary structures found for {book}.")
+
+    row_dicts = [dict(r) for r in rows]
+    tree_text = render_structure_tree(row_dicts)
+    return text(tree_text)
+
+
 _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
@@ -1361,6 +1455,8 @@ _TOOL_HANDLERS = {
     "get_literary_structure": handle_get_literary_structure,
     "search_literary_structures": handle_search_literary_structures,
     "get_literary_parallel": handle_get_literary_parallel,
+    "get_literary_structure_by_reference": handle_get_literary_structure_by_reference,
+    "get_literary_tree": handle_get_literary_tree,
 }
 
 # =============================================================================

@@ -671,4 +671,54 @@ theological relationship between the cited passages.""",
             "required": ["book"]
         }
     ),
+    Tool(
+        name="get_literary_structure_by_reference",
+        annotations=ToolAnnotations(title="Literary Structure by Reference", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Look up literary structures by Bible reference (e.g. 'Gen 1:1', 'Genesis 1:1-31').
+
+Normalises the book name to the stored scope code, then matches structures
+whose parsed reference range overlaps the requested verses. Returns a
+structured result with source attribution and interpretive-proposal
+disclaimer. Use this to discover what literary structures cover a given
+passage without first knowing the OSIS book code.
+
+Source: Hajime Murai, CC BY 4.0
+http://www.bible.literarystructure.info/bible/bible_e.html
+
+⚠️ DISCLAIMER: These structures are scholarly interpretive proposals,
+not canonical or doctrinal divisions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "description": "Bible reference (e.g., 'Gen 1:1', 'Genesis 1:1-31', 'Mat 5')"},
+                "source_id": {"type": "string", "description": "Optional: filter by source ID"},
+                "limit": {"type": "integer", "description": "Max results. Default: 50"}
+            },
+            "required": ["reference"]
+        }
+    ),
+    Tool(
+        name="get_literary_tree",
+        annotations=ToolAnnotations(title="Literary Structure Tree", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
+        description="""Render literary structures for a book as a nested readable tree, grouped by [N] headers.
+
+Groups child rows (A, B, A', P, etc.) under their [N] header using
+parent_label, depth, and unit_sequence. Preserves source IDs and raw
+references. Does not invent relationships absent from the data rows.
+
+Source: Hajime Murai, CC BY 4.0
+http://www.bible.literarystructure.info/bible/bible_e.html
+
+⚠️ DISCLAIMER: These structures are scholarly interpretive proposals,
+not canonical or doctrinal divisions.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "book": {"type": "string", "description": "OSIS book code (e.g., 'Gen', 'Mat', '1Sa')"},
+                "source_id": {"type": "string", "description": "Optional: filter by source (e.g., 'murai_structure_ot')"},
+                "limit": {"type": "integer", "description": "Max rows. Default: 500"}
+            },
+            "required": ["book"]
+        }
+    ),
 ]
