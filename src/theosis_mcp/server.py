@@ -40,6 +40,8 @@ from .literary_helpers import (
     reference_overlaps,
     render_structure_tree,
     format_structure_result,
+    resolve_cross_references,
+    format_cross_ref_tokens,
 )
 
 # Configure logging
@@ -1319,6 +1321,40 @@ async def handle_get_literary_parallel(args: dict[str, Any]) -> list[TextContent
     if not rows:
         return text(f"No literary structures with cross-references found for {book}.")
 
+    # Collect unique target book codes from cross-references to pre-fetch
+    # pericope headers for resolution.
+    target_books: set[str] = set()
+    for r in rows:
+        cr = r["cross_references"] or ""
+        for piece in cr.split(","):
+            piece = piece.strip()
+            if not piece:
+                continue
+            m = re.match(r"^\d+_([A-Za-z]+)@\d+", piece)
+            if m:
+                book_name = m.group(1).lower()
+                from .database import BOOK_ABBREV_MAP as _BAM
+                code = _BAM.get(book_name)
+                if code:
+                    target_books.add(code)
+
+    # Pre-fetch pericope headers for all target books
+    pericope_rows: list[dict] = []
+    if target_books:
+        async with db.pool.acquire() as conn:
+            for tb in sorted(target_books):
+                fetched = await conn.fetch(
+                    """
+                    SELECT id, source_id, book, structure_label, is_header,
+                           description_ja, description_en
+                    FROM public.literary_structures
+                    WHERE book = $1 AND is_header = TRUE
+                    ORDER BY excel_row
+                    """,
+                    tb,
+                )
+                pericope_rows.extend(dict(r) for r in fetched)
+
     result = f"## Literary Parallels for {book}\n\n"
     result += LIT_STRUCT_ATTRIBUTION + "\n\n"
     for r in rows:
@@ -1326,6 +1362,14 @@ async def handle_get_literary_parallel(args: dict[str, Any]) -> list[TextContent
         if r["description_en"]:
             result += f"**Description**: {r['description_en'][:300]}\n"
         result += f"**Cross-references**: {r['cross_references']}\n"
+
+        # Resolve cross-reference tokens to readable labels
+        tokens = resolve_cross_references(r["cross_references"], pericope_rows)
+        if tokens:
+            result += "\n**Resolved parallels**:\n"
+            for line in format_cross_ref_tokens(tokens):
+                result += f"  {line}\n"
+
         result += "\n---\n\n"
     return text(result)
 

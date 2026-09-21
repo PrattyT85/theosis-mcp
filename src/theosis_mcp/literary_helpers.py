@@ -7,6 +7,7 @@ These pure functions are testable without a database or MCP server.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from .database import BOOK_ABBREV_MAP, BOOK_NAMES
@@ -234,6 +235,190 @@ def reference_overlaps(
     else:
         # Single verse query
         return row_start <= query_point <= row_end
+
+
+# ---------------------------------------------------------------------------
+# Cross-reference token parsing
+# ---------------------------------------------------------------------------
+
+# Pattern: <canonNumber>_<BookName>@<pericopeNumber>
+# Examples: "42_Luke@13", "23_Isaiah@10", "40_Matthew@64"
+_CROSSREF_TOKEN_RE = re.compile(
+    r"^\s*(?P<canon>\d+)_(?P<book>[A-Za-z]+)@(?P<pericope>\d+)\s*$"
+)
+
+# Canon number → OSIS book code for all 66 books (standard Protestant canon)
+# OT: 1-39 = Gen..Mal; NT: 40-66 = Mat..Rev
+_CANON_BOOK_MAP: dict[int, str] = {
+    1: "Gen", 2: "Exo", 3: "Lev", 4: "Num", 5: "Deu",
+    6: "Jos", 7: "Jdg", 8: "Rut", 9: "Sam", 10: "Sam",
+    11: "Kgs", 12: "Kgs", 13: "Chr", 14: "Chr", 15: "EzrNeh",
+    16: "EzrNeh", 17: "Est", 18: "Job", 19: "Psa", 20: "Pro",
+    21: "Ecc", 22: "Sng", 23: "Isa", 24: "Jer", 25: "Lam",
+    26: "Ezk", 27: "Dan", 28: "Hos", 29: "Jol", 30: "Amo",
+    31: "Oba", 32: "Jon", 33: "Mic", 34: "Nam", 35: "Hab",
+    36: "Zep", 37: "Hag", 38: "Zec", 39: "Mal",
+    40: "Mat", 41: "Mrk", 42: "Luk", 43: "Jhn", 44: "Act",
+    45: "Rom", 46: "1Co", 47: "2Co", 48: "Gal", 49: "Eph",
+    50: "Php", 51: "Col", 52: "1Th", 53: "2Th", 54: "1Ti",
+    55: "2Ti", 56: "Tit", 57: "Phm", 58: "Heb", 59: "Jas",
+    60: "1Pe", 61: "2Pe", 62: "1Jn", 63: "2Jn", 64: "3Jn",
+    65: "Jud", 66: "Rev",
+}
+
+
+@dataclass
+class CrossRefToken:
+    """One parsed cross-reference token from a literary structure row."""
+    raw: str
+    canon: int | None = None
+    book_name: str | None = None  # original name from token (e.g. "Luke")
+    pericope: int | None = None
+    # Resolved fields (populated by resolve_cross_references)
+    target_book_code: str | None = None  # OSIS code (e.g. "Luk")
+    target_id: int | None = None  # literary_structures.id of the [N] header
+    target_label: str | None = None  # structure_label (e.g. "[13]")
+    target_ja: str | None = None  # Japanese description of pericope header
+
+
+def parse_cross_reference_tokens(raw_str: str | None) -> list[CrossRefToken]:
+    """
+    Parse a comma-separated cross-reference string into CrossRefToken objects.
+
+    Input format (from workbook): "42_Luke@13,23_Isaiah@10,23_Isaiah@11"
+    Each token: <canonNumber>_<BookName>@<pericopeNumber>
+
+    Returns a list of CrossRefToken objects with raw, canon, book_name,
+    pericope fields populated. Unparseable tokens retain only the raw string.
+    """
+    if not raw_str or not raw_str.strip():
+        return []
+
+    tokens: list[CrossRefToken] = []
+    for piece in raw_str.split(","):
+        piece = piece.strip()
+        if not piece:
+            continue
+
+        m = _CROSSREF_TOKEN_RE.match(piece)
+        if m:
+            canon = int(m.group("canon"))
+            book_name = m.group("book")
+            pericope = int(m.group("pericope"))
+
+            # Resolve target_book_code from canon number first, then book name
+            target_code = _CANON_BOOK_MAP.get(canon)
+            if not target_code:
+                # Fallback: try book name lookup via BOOK_ABBREV_MAP
+                target_code = BOOK_ABBREV_MAP.get(book_name.lower())
+
+            tokens.append(CrossRefToken(
+                raw=piece,
+                canon=canon,
+                book_name=book_name,
+                pericope=pericope,
+                target_book_code=target_code,
+            ))
+        else:
+            # Unparseable token — keep raw text
+            tokens.append(CrossRefToken(raw=piece))
+
+    return tokens
+
+
+def resolve_cross_references(
+    raw_str: str | None,
+    pericope_rows: list[dict[str, Any]],
+) -> list[CrossRefToken]:
+    """
+    Parse and resolve cross-reference tokens against pericope header rows.
+
+    Args:
+        raw_str: comma-separated cross-reference string from literary_structures
+        pericope_rows: list of structure row dicts (headers with is_header=True
+            and structure_label matching '[N]' pattern) that are candidates for
+            resolution. These should be pre-fetched from the relevant book(s).
+
+    Returns:
+        List of CrossRefToken objects with resolution fields populated
+        when possible. Unresolvable tokens retain raw text only.
+
+    Resolution strategy:
+        1. Parse token to get canon/book_name/pericope
+        2. Match pericope header by: target_book_code == row['book']
+           AND structure_label == f'[{pericope}]'
+        3. If found, populate target_id, target_label, target_ja
+    """
+    tokens = parse_cross_reference_tokens(raw_str)
+    if not tokens or not pericope_rows:
+        return tokens
+
+    # Build a lookup: (book_code, pericope_number) → row
+    pericope_map: dict[tuple[str, int], dict[str, Any]] = {}
+    for row in pericope_rows:
+        if not row.get("is_header"):
+            continue
+        label = row.get("structure_label") or ""
+        # Match "[N]" pattern
+        m = re.match(r"^\[(\d+)\]$", label)
+        if m:
+            num = int(m.group(1))
+            book = row.get("book", "")
+            pericope_map[(book, num)] = row
+
+    for token in tokens:
+        if token.target_book_code is None or token.pericope is None:
+            continue
+        key = (token.target_book_code, token.pericope)
+        row = pericope_map.get(key)
+        if row:
+            token.target_id = row.get("id")
+            token.target_label = row.get("structure_label")
+            # Prefer readable English for the MCP result; retain Japanese as
+            # a fallback when the workbook has no English description.
+            token.target_ja = row.get("description_en") or row.get("description_ja")
+
+    return tokens
+
+
+def format_cross_ref_tokens(tokens: list[CrossRefToken]) -> list[str]:
+    """
+    Format resolved cross-reference tokens into readable lines.
+
+    Each line includes:
+      - Raw token (e.g. `42_Luke@13`)
+      - Readable label: "Book — pericope N: description" when resolved
+      - Target ID when available
+
+    Returns a list of formatted strings for display.
+    """
+    lines: list[str] = []
+    for token in tokens:
+        book_display = token.book_name or "???"
+        pericope_display = str(token.pericope) if token.pericope is not None else "?"
+
+        if token.target_id is not None:
+            # Resolved
+            desc = ""
+            if token.target_ja:
+                desc = f": {token.target_ja}"
+            line = (
+                f"- `{token.raw}` → "
+                f"{book_display} — pericope {pericope_display}{desc} "
+                f"(ID: {token.target_id})"
+            )
+        elif token.pericope is not None:
+            # Partially resolved (parsed but not found in data)
+            line = (
+                f"- `{token.raw}` → "
+                f"{book_display} — pericope {pericope_display} "
+                f"(unresolved)"
+            )
+        else:
+            # Unparseable
+            line = f"- `{token.raw}` (unparseable)"
+        lines.append(line)
+    return lines
 
 
 # ---------------------------------------------------------------------------

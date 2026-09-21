@@ -63,6 +63,8 @@ def test_literary_parallel_cross_references_are_returned():
         text = _tool_text(client.tools_call("get_literary_parallel", {"book": "Mat", "limit": 3}))
     assert "Cross-references" in text
     assert "Luke@" in text or "Isaiah@" in text or "Micah@" in text
+    assert "Resolved parallels" in text
+    assert "Luke — pericope" in text or "Isaiah — pericope" in text
 
 
 @pytest.mark.live
