@@ -3,7 +3,7 @@
 The `theosis_ai` profile now includes the first ancient-corpus status/local-adapter service:
 
 - Repository: https://github.com/PrattyT85/theosis-ancient-context-mcp
-- Current source commit: `8b25606` (CDLI adapter and TLHdig support)
+- Current source commit: `a3d187d` (CDLI filtering, source manifest, health checks, TLHdig support)
 - Local checkout: `/home/hermes/repos/theosis-ancient-context-mcp`
 - Transport: local stdio; no HTTP port
 - Profile server name: `ancient_context`
@@ -45,6 +45,7 @@ MCP stdio initialize succeeded
 CUC local search live-tested
 TLHdig local status/search/text retrieval live-tested
 CDLI search/metadata/ATF adapter live-tested
+Offline health check passes; live health checks are opt-in and report upstream timeouts explicitly
 ```
 
 Local corpus adapters are opt-in and do not download or bundle source corpora.
