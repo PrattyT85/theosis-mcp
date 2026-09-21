@@ -3,7 +3,7 @@
 The `theosis_ai` profile now includes the first ancient-corpus status/local-adapter service:
 
 - Repository: https://github.com/PrattyT85/theosis-ancient-context-mcp
-- Current source commit: `753e461`
+- Current source commit: `8b25606` (CDLI adapter and TLHdig support)
 - Local checkout: `/home/hermes/repos/theosis-ancient-context-mcp`
 - Transport: local stdio; no HTTP port
 - Profile server name: `ancient_context`
@@ -38,12 +38,13 @@ Ugaritic annotation scheme is not a published Ugaritic-language corpus.
 ## Verification
 
 ```text
-96 offline tests passed
+143 offline tests passed
 compileall passed
 MCP stdio initialize succeeded
 5 tools discovered in Hermes
 CUC local search live-tested
 TLHdig local status/search/text retrieval live-tested
+CDLI search/metadata/ATF adapter live-tested
 ```
 
 Local corpus adapters are opt-in and do not download or bundle source corpora.
